@@ -13,8 +13,17 @@ import { LOCAL_DRUGS } from "./drugs";
 
 // gemini-2.0-flash was shut down by Google on 2026-06-01 (API returns 404).
 // gemini-3.8-flash is Google's named successor and is on the API free tier.
-// Override any time with the GEMINI_MODEL env var.
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash";
+// Override the primary any time with the GEMINI_MODEL env var.
+//
+// The free tier is shared and bursty: one model can be overloaded or out of
+// quota while another answers instantly. So the vision call walks a short
+// chain of free models and uses the first one that responds — the label
+// JSON is identical whichever model reads it.
+const GEMINI_MODELS = [
+  process.env.GEMINI_MODEL || "gemini-3.8-flash",
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
+].filter((m, i, a) => a.indexOf(m) === i);
 
 const PROMPT = `You are reading a medicine label in a photo. The item may be a
 medicine box OR a blister strip (patta) — the foil strip that holds tablets.
@@ -41,19 +50,24 @@ function cleanJson(raw: string): string {
   return raw.replace(/```json|```/g, "").trim();
 }
 
-/** Server-side: extract label fields with Gemini vision. Null = unavailable. */
-export async function extractWithGemini(
+/** One vision attempt against one model. Null = this model did not answer. */
+async function tryGeminiModel(
+  model: string,
+  key: string,
   imageBase64: string,
-  mimeType = "image/jpeg"
+  mimeType: string
 ): Promise<ExtractedLabel | null> {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) return null;
+  // One attempt gets at most ~20s; a hung model must not eat the whole
+  // request when the next model in the chain might answer instantly.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 20000);
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: ctrl.signal,
         body: JSON.stringify({
           contents: [
             {
@@ -63,19 +77,21 @@ export async function extractWithGemini(
               ],
             },
           ],
-          // Lean extraction call: this is a tiny label-reading job, so keep
-          // the model deterministic, cap the reply, and switch "thinking"
-          // off — thinking tokens only add seconds here, not accuracy.
+          // Keep this minimal on purpose: extra generation fields
+          // (temperature / maxOutputTokens / thinkingConfig) coincided with
+          // the live vision call failing on 2026-10-23 — the model chain
+          // below is what fixed reliability, not generation tuning.
           generationConfig: {
             responseMimeType: "application/json",
-            temperature: 0,
-            maxOutputTokens: 512,
-            thinkingConfig: { thinkingBudget: 0 },
           },
         }),
       }
     );
-    if (!res.ok) return null;
+    if (!res.ok) {
+      // Visible in the Vercel function logs if diagnosis is ever needed.
+      console.error(`Gemini ${model} responded ${res.status}`);
+      return null;
+    }
     const data = await res.json();
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!text) return null;
@@ -90,7 +106,23 @@ export async function extractWithGemini(
     };
   } catch {
     return null;
+  } finally {
+    clearTimeout(timer);
   }
+}
+
+/** Server-side: extract label fields with Gemini vision. Null = unavailable. */
+export async function extractWithGemini(
+  imageBase64: string,
+  mimeType = "image/jpeg"
+): Promise<ExtractedLabel | null> {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) return null;
+  for (const model of GEMINI_MODELS) {
+    const label = await tryGeminiModel(model, key, imageBase64, mimeType);
+    if (label) return label;
+  }
+  return null;
 }
 
 const KNOWN_MAKERS = [
