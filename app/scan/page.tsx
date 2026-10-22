@@ -6,7 +6,7 @@
 import { useState } from "react";
 import CameraCapture from "@/components/CameraCapture";
 import VerdictCard, { type ScanResult } from "@/components/VerdictCard";
-import { extractTextOnDevice } from "@/lib/ocr-client";
+import { extractTextOnDevice, downscaleImage } from "@/lib/ocr-client";
 import { CircleAlert, CircleCheck, TriangleAlert } from "@/components/icons";
 
 type Phase = "idle" | "reading" | "done" | "error";
@@ -87,18 +87,34 @@ export default function ScanPage() {
     setStatus("Reading label…");
     const stageRunner = runStages("");
     try {
-      // Attempt 1: server-side Gemini vision OCR
-      const base64 = await blobToBase64(blob);
-      let res = await fetch("/api/scan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: base64 }),
-      });
+      // Shrink the photo first: a full-size phone photo is several MB,
+      // which makes the upload (and the AI read) slow for no benefit.
+      const image = await downscaleImage(blob);
+
+      // Attempt 1: server-side Gemini vision OCR. Give it up to ~45s —
+      // if it has not answered by then, fall back to on-device OCR
+      // instead of leaving the user staring at a spinner.
+      const base64 = await blobToBase64(image);
+      let res: Response | null = null;
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 45_000);
+      try {
+        res = await fetch("/api/scan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image: base64 }),
+          signal: controller.signal,
+        });
+      } catch {
+        res = null; // timed out or network error → use the fallback below
+      } finally {
+        clearTimeout(timer);
+      }
 
       // Attempt 2 (fallback): on-device Tesseract OCR
-      if (res.status === 503) {
+      if (!res || res.status === 503) {
         setStatus("AI unavailable — reading on-device instead…");
-        const { text, confidence } = await extractTextOnDevice(blob, (p) =>
+        const { text, confidence } = await extractTextOnDevice(image, (p) =>
           setProgress(0.1 + p * 0.7)
         );
         res = await fetch("/api/scan", {

@@ -69,7 +69,7 @@ export default function CameraCapture({
         <span className="corner bl" />
         <span className="corner br" />
         {ready && <div className="laser" />}
-        <div className="scan-hint">Align the pack inside the frame</div>
+        <div className="scan-hint">Align the box or strip inside the frame</div>
       </div>
       <div className="capture-bar">
         <button className="btn capture-btn" onClick={capture} disabled={!ready}>
@@ -93,8 +93,8 @@ export default function CameraCapture({
         />
       </div>
       <p className="muted small" style={{ marginTop: "0.6rem" }}>
-        Tip: fill the frame with the pack&apos;s front label and hold steady in
-        good light.
+        Works for a box or a blister strip (patta). Lay it flat, fill the
+        frame, and hold steady in good light.
       </p>
     </div>
   );

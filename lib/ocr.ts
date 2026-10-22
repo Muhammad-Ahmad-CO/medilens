@@ -16,7 +16,8 @@ import { LOCAL_DRUGS } from "./drugs";
 // Override any time with the GEMINI_MODEL env var.
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash";
 
-const PROMPT = `You are reading a medicine pack label in a photo.
+const PROMPT = `You are reading a medicine label in a photo. The item may be a
+medicine box OR a blister strip (patta) — the foil strip that holds tablets.
 Return ONLY valid JSON (no markdown fences) with these keys:
 {
   "drugName": string | null,        // brand name, e.g. "Panadol"
@@ -25,7 +26,16 @@ Return ONLY valid JSON (no markdown fences) with these keys:
   "expiryDate": string | null,      // exactly as printed, e.g. "08/27"
   "ocrConfidence": number           // 0..1, your confidence in the reading
 }
-If a field is unreadable or absent, use null.`;
+If a field is unreadable or absent, use null.
+
+Rules for blister strips (foil):
+- The medicine name is usually printed MANY times across the foil. That
+  repeated text is ONE drug — report the name once.
+- Batch number and expiry, when present, are crimped or embossed along one
+  edge of the strip and may be faint or low-contrast — check the edges.
+- Many strips carry no batch/expiry at all (those live on the outer box).
+  If a batch or expiry is not clearly visible, return null for it.
+- NEVER invent or guess a batch number or expiry date that is not visible.`;
 
 function cleanJson(raw: string): string {
   return raw.replace(/```json|```/g, "").trim();
@@ -53,7 +63,15 @@ export async function extractWithGemini(
               ],
             },
           ],
-          generationConfig: { responseMimeType: "application/json" },
+          // Lean extraction call: this is a tiny label-reading job, so keep
+          // the model deterministic, cap the reply, and switch "thinking"
+          // off — thinking tokens only add seconds here, not accuracy.
+          generationConfig: {
+            responseMimeType: "application/json",
+            temperature: 0,
+            maxOutputTokens: 512,
+            thinkingConfig: { thinkingBudget: 0 },
+          },
         }),
       }
     );
@@ -91,6 +109,10 @@ export function extractFromText(
   const upper = text.toUpperCase();
   const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
+  // Blister strips print the same word over and over ("PANADOL PANADOL
+  // PANADOL GSK"). Collapse those runs so the name reads as one drug.
+  const dedupeWords = (s: string) => s.replace(/\b(\S+)(\s+\1\b)+/gi, "$1");
+
   // Drug name: first known drug mentioned in the text…
   let drugName: string | null = null;
   for (const d of LOCAL_DRUGS) {
@@ -101,7 +123,10 @@ export function extractFromText(
   }
   // …otherwise the first non-empty line as an uncertain candidate.
   if (!drugName) {
-    const line = text.split("\n").map((l) => l.trim()).find((l) => l.length > 2);
+    const line = text
+      .split("\n")
+      .map((l) => dedupeWords(l.trim()))
+      .find((l) => l.length > 2);
     drugName = line ? line.slice(0, 40) : null;
   }
 

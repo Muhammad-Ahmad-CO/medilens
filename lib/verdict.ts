@@ -170,6 +170,16 @@ export function evaluateVerdict(
     reasons.push("Batch number present.");
   }
 
+  // Blister-strip guidance: on a foil strip (patta) the batch and expiry are
+  // often only on the outer box, so when BOTH are missing but the drug
+  // matched, point the user at the box. This is guidance only — it does not
+  // change the level or the score, which Rules 4–5 already set.
+  if (drug && !label.batchNumber && !label.expiryDate) {
+    reasons.push(
+      "Batch and expiry are often printed on the box, not the strip — check the box if you have it."
+    );
+  }
+
   // --- Rule 6: weak OCR reading --------------------------------------------
   if (label.ocrConfidence < 0.6) {
     raise(
