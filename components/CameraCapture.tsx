@@ -3,6 +3,7 @@
  * Camera capture with file-upload fallback (for desktops / denied cameras).
  */
 import { useEffect, useRef, useState } from "react";
+import { Camera, Upload } from "@/components/icons";
 
 export default function CameraCapture({
   onCapture,
@@ -46,9 +47,23 @@ export default function CameraCapture({
 
   return (
     <div>
-      {error && <p className="muted small">{error}</p>}
+      {error && (
+        <p className="muted small" style={{ marginTop: 0 }}>
+          {error}
+        </p>
+      )}
       <div className="viewfinder">
         <video ref={videoRef} className="camera-frame" playsInline muted />
+        {!ready && (
+          <div className="vf-empty">
+            <Camera size={30} />
+            <span>
+              {error
+                ? "Camera is off — use Upload below to pick a photo of the pack."
+                : "Starting camera…"}
+            </span>
+          </div>
+        )}
         <span className="corner tl" />
         <span className="corner tr" />
         <span className="corner bl" />
@@ -58,13 +73,13 @@ export default function CameraCapture({
       </div>
       <div className="capture-bar">
         <button className="btn capture-btn" onClick={capture} disabled={!ready}>
-          📸 Capture label
+          <Camera size={19} /> Capture label
         </button>
         <button
           className="btn btn-secondary"
           onClick={() => fileRef.current?.click()}
         >
-          Upload
+          <Upload size={18} /> Upload
         </button>
         <input
           ref={fileRef}

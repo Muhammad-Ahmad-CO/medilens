@@ -1,275 +1,228 @@
 import Reveal from "@/components/Reveal";
+import { LOCAL_DRUGS } from "@/lib/drugs";
+import {
+  CountUp,
+  HeroScene,
+  PenaltyBars,
+  VerdictShowcase,
+} from "@/components/home-widgets";
+import {
+  ArrowRight,
+  Camera,
+  Database,
+  FileText,
+  Layers,
+  MapPin,
+  ScanLine,
+  ShieldCheck,
+  WifiOff,
+} from "@/components/icons";
 
 /**
- * MediLens landing page — international-competition grade first impression:
- * cinematic hero, live phone mockup, crisis stats, how-it-works, verdict
- * showcase, tech marquee and a closing CTA.
+ * MediLens home — clinical v3 design (approved mock):
+ * pinned photo hero, photo strip, deep-green crisis band, sample scan
+ * feed, verdict showcase, how-it-works, medicine index, hotspot panel,
+ * features, closing.
  */
+
+const FEED: { level: "green" | "amber" | "red"; drug: string; place: string; time: string }[] = [
+  { level: "green", drug: "Panadol 500mg", place: "Karachi", time: "2 min ago" },
+  { level: "red", drug: "Brufen 400mg — expired", place: "Lahore", time: "9 min ago" },
+  { level: "green", drug: "Augmentin 625mg", place: "Islamabad", time: "14 min ago" },
+  { level: "amber", drug: "Disprin — label unclear", place: "Hyderabad", time: "21 min ago" },
+  { level: "green", drug: "Flagyl 400mg", place: "Faisalabad", time: "26 min ago" },
+  { level: "red", drug: "Unknown pack — no match", place: "Multan", time: "33 min ago" },
+  { level: "green", drug: "Risek 20mg", place: "Rawalpindi", time: "41 min ago" },
+  { level: "amber", drug: "Arinac — batch unconfirmed", place: "Peshawar", time: "48 min ago" },
+];
+
+const FEATURES = [
+  {
+    icon: <Camera size={22} />,
+    title: "Camera-first scanning",
+    text: "No typing, no barcodes to hunt for. Photograph the front of the pack and MediLens reads the printed label — name, maker, batch and expiry.",
+  },
+  {
+    icon: <Database size={22} />,
+    title: "Checked against real records",
+    text: "Every reading is cross-checked against a local formulary of common Pakistani medicines and the openFDA database used by regulators.",
+  },
+  {
+    icon: <Layers size={22} />,
+    title: "Layered safety checks",
+    text: "Database match, manufacturer match and expiry logic combine into one confidence score. Hard failures — like an expired date — cannot be outvoted.",
+  },
+  {
+    icon: <FileText size={22} />,
+    title: "Explained verdicts + PDF",
+    text: "You see exactly why a pack passed or failed, in plain words, and can download a PDF report to show a pharmacist or keep for your records.",
+  },
+  {
+    icon: <MapPin size={22} />,
+    title: "Community hotspot map",
+    text: "Anonymous reports build a live map of where suspicious packs are being found, so neighbourhoods can be warned early.",
+  },
+  {
+    icon: <WifiOff size={22} />,
+    title: "Works when AI is offline",
+    text: "If the cloud vision service is unavailable, on-device text reading takes over automatically. A weak connection never blocks a safety check.",
+  },
+];
+
+const STEPS = [
+  {
+    num: "01",
+    icon: <Camera size={20} />,
+    title: "Photograph the pack",
+    text: "Open the scanner and photograph the front label of any medicine pack — strip, bottle or box. Good light and a straight angle give the clearest reading, and there is an upload option if the camera is unavailable.",
+  },
+  {
+    num: "02",
+    icon: <ScanLine size={20} />,
+    title: "AI reads the label",
+    text: "Vision AI extracts the medicine name, manufacturer, batch number and expiry date from the photo. If the cloud service is unreachable, the same reading happens on your device instead — automatically.",
+  },
+  {
+    num: "03",
+    icon: <Database size={20} />,
+    title: "Cross-checked against databases",
+    text: "The reading is matched against a local formulary of common medicines and the openFDA database. The maker on the pack must agree with the official record, and the expiry date must be valid and in the future.",
+  },
+  {
+    num: "04",
+    icon: <ShieldCheck size={20} />,
+    title: "A verdict you can act on",
+    text: "The checks combine into green, amber or red — each with its reasons listed in plain language. Save the PDF report, and if a pack looks wrong, report it anonymously to the community hotspot map.",
+  },
+];
+
 export default function Home() {
   return (
     <>
-      {/* ================= HERO ================= */}
-      <section className="hero">
-        <div className="hero-bg">
-          <div className="orb orb-1" />
-          <div className="orb orb-2" />
-          <div className="orb orb-3" />
-          <div className="grid-overlay" />
-        </div>
-        <div className="hero-inner container">
-          <span className="pill">
-            <span className="dot" /> AI-powered medicine verification
-          </span>
-          <h1>
-            Is this medicine <span className="grad-text">genuine?</span>
-          </h1>
-          <p className="lead">
-            Point your phone camera at any medicine pack. MediLens reads the
-            label, checks it against drug databases, and gives you an explained
-            red&nbsp;/&nbsp;amber&nbsp;/&nbsp;green safety verdict — in seconds.
-          </p>
-          <div className="cta-row">
-            <a className="btn" href="/scan">
-              📷 Scan a medicine
-            </a>
-            <a className="btn btn-ghost" href="#how">
-              See how it works
-            </a>
-          </div>
-          <div className="stats">
-            <div className="stat">
-              <b>1 in 10</b>
-              <span>medicines falsified in LMICs (WHO)</span>
-            </div>
-            <div className="stat">
-              <b>~5 sec</b>
-              <span>from photo to verdict</span>
-            </div>
-            <div className="stat">
-              <b>Rs 0</b>
-              <span>free forever, no hardware</span>
-            </div>
-          </div>
+      <HeroScene />
 
-          {/* Phone mockup — the "wow" visual */}
-          <div className="hero-visual">
-            <div className="phone">
-              <div className="phone-screen">
-                <div className="phone-notch">
-                  <i />
-                </div>
-                <div className="mock-scan">
-                  <div className="mock-view">
-                    <div className="mock-laser" />
-                    <div className="mock-pack">
-                      PANADOL
-                      <small>GSK · Batch B12345</small>
-                    </div>
-                  </div>
-                  <div className="mock-verdict">
-                    <span className="tick">✓</span>
-                    <div>
-                      <b>Likely genuine</b>
-                      <span>GSK record · expiry valid</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ================= TECH MARQUEE ================= */}
-      <div className="marquee" aria-hidden>
-        <div className="marquee-track">
-          {[
-            "NEXT.JS 14", "GEMINI VISION AI", "OPENFDA DATA", "SUPABASE",
-            "TESSERACT OCR", "LEAFLET MAPS", "PWA OFFLINE-FIRST", "JSPDF REPORTS",
-            "NEXT.JS 14", "GEMINI VISION AI", "OPENFDA DATA", "SUPABASE",
-            "TESSERACT OCR", "LEAFLET MAPS", "PWA OFFLINE-FIRST", "JSPDF REPORTS",
-          ].map((t, i) => (
-            <span key={i}>{t} ✦</span>
-          ))}
-        </div>
-      </div>
-
-      {/* ================= PROBLEM ================= */}
-      <section className="section">
-        <div className="container">
+      {/* ---------- photo strip ---------- */}
+      <section className="section" style={{ paddingTop: 84 }}>
+        <div className="wrap">
           <Reveal>
-            <div className="center">
-              <span className="eyebrow">The crisis</span>
-              <h2>
-                Counterfeit medicine is a <span className="grad-text">silent epidemic</span>
-              </h2>
-              <p className="sub">
-                Fake and substandard drugs don&apos;t just waste money — they
-                fail to cure, breed resistance, and kill. The technology to
-                fight back fits in your pocket.
-              </p>
+            <div className="strip">
+              <figure>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/img/hero-pharmacy.jpg" alt="Pharmacy shelves stocked with medicine packs" loading="lazy" />
+                <figcaption>Real packs, real shelves — the label is the evidence</figcaption>
+              </figure>
+              <figure className="tall">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/img/researcher.jpg" alt="A researcher examining samples in a laboratory" loading="lazy" />
+                <figcaption>Verified against trusted records</figcaption>
+              </figure>
+              <figure className="tall">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/img/lab.jpg" alt="Laboratory testing of medicine samples" loading="lazy" />
+                <figcaption>Built for families, not labs</figcaption>
+              </figure>
             </div>
           </Reveal>
-          <div className="grid3">
-            <Reveal>
-              <div className="card stat-card">
-                <b className="red">1 in 10</b>
-                <h3>Falsified medicines</h3>
-                <p>
-                  WHO estimate for low- and middle-income countries — the very
-                  places with the weakest verification infrastructure.
-                </p>
+        </div>
+      </section>
+
+      {/* ---------- crisis band ---------- */}
+      <section className="section" style={{ paddingTop: 0 }}>
+        <div className="wrap">
+          <Reveal>
+            <div className="crisis">
+              <div className="inner">
+                <div>
+                  <span className="eyebrow">Why this matters</span>
+                  <h2>
+                    Fake medicine is not a small problem. It is a global one.
+                  </h2>
+                  <p>
+                    The World Health Organization estimates that 1 in 10
+                    medical products in low- and middle-income countries is
+                    substandard or falsified. These packs look identical to
+                    real ones — the difference is only visible in the data
+                    printed on them. That is exactly what MediLens checks.
+                  </p>
+                  <div className="big-stat">
+                    <div>
+                      <b>
+                        1 in <CountUp to={10} />
+                      </b>
+                      <span>medical products may be fake or substandard (WHO)</span>
+                    </div>
+                    <div>
+                      <b>
+                        <CountUp to={10.5} decimals={1} prefix="$" suffix="B" />
+                      </b>
+                      <span>spent yearly on falsified medicines worldwide</span>
+                    </div>
+                  </div>
+                </div>
+                <PenaltyBars />
               </div>
-            </Reveal>
-            <Reveal delay="reveal-d1">
-              <div className="card stat-card">
-                <b className="amber">$0</b>
-                <h3>Cost of checking today</h3>
-                <p>
-                  There is no consumer tool for this. Patients either trust the
-                  pack blindly or pay for lab tests they can&apos;t afford.
-                </p>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ---------- sample scan feed ---------- */}
+      <section className="feed-sec" aria-label="Sample recent scans">
+        <div className="wrap">
+          <div className="feed-head">
+            <span className="dot" /> Recent community scans — sample activity
+          </div>
+        </div>
+        <div className="feed-viewport">
+          <div className="feed-track">
+            {[...FEED, ...FEED].map((f, i) => (
+              <div className="feed-item" key={i} aria-hidden={i >= FEED.length}>
+                <span className={`fdot ${f.level}`} />
+                <div>
+                  <b>{f.drug}</b>
+                  <span>
+                    {f.place} · {f.time}
+                  </span>
+                </div>
               </div>
-            </Reveal>
-            <Reveal delay="reveal-d2">
-              <div className="card stat-card">
-                <b className="cyan">5 sec</b>
-                <h3>MediLens verdict time</h3>
-                <p>
-                  One photo → AI label reading → database match → explained
-                  verdict. No lab, no hardware, no cost.
-                </p>
-              </div>
-            </Reveal>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* ================= HOW IT WORKS ================= */}
-      <section className="section" id="how">
-        <div className="container">
+      {/* ---------- verdict showcase ---------- */}
+      <section className="section">
+        <div className="wrap">
           <Reveal>
-            <div className="center">
+            <VerdictShowcase />
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ---------- how it works ---------- */}
+      <section className="section alt" id="how">
+        <div className="wrap">
+          <Reveal>
+            <div className="sec-head">
               <span className="eyebrow">How it works</span>
               <h2>
-                Photo in. <span className="grad-text">Verdict out.</span>
+                From photo to verdict in <span className="u">four steps</span>
               </h2>
-              <p className="sub">
-                A four-stage pipeline engineered for speed, accuracy and — most
-                importantly — explainability. Every verdict tells you exactly
-                why.
+              <p>
+                No sign-up, no app install, nothing to learn. If you can take
+                a photo, you can verify a medicine.
               </p>
             </div>
           </Reveal>
-          <div className="grid3">
-            <Reveal>
-              <div className="card">
-                <div className="step-num">01</div>
-                <h3>Capture</h3>
-                <p>
-                  The PWA opens your camera with a guided viewfinder. Snap the
-                  pack&apos;s front label — or upload a photo.
-                </p>
-              </div>
-            </Reveal>
-            <Reveal delay="reveal-d1">
-              <div className="card">
-                <div className="step-num">02</div>
-                <h3>Read &amp; match</h3>
-                <p>
-                  Gemini vision extracts drug name, manufacturer, batch and
-                  expiry — then matches against a curated drug database and the
-                  openFDA registry.
-                </p>
-              </div>
-            </Reveal>
-            <Reveal delay="reveal-d2">
-              <div className="card">
-                <div className="step-num">03</div>
-                <h3>Verdict</h3>
-                <p>
-                  A transparent rule engine scores the pack red, amber or
-                  green — with every reason listed, plus a PDF report for your
-                  pharmacist.
-                </p>
-              </div>
-            </Reveal>
-          </div>
-        </div>
-      </section>
-
-      {/* ================= VERDICT SHOWCASE ================= */}
-      <section className="section">
-        <div className="container">
-          <Reveal>
-            <div className="center">
-              <span className="eyebrow">Explainable by design</span>
-              <h2>
-                Not a black box. <span className="grad-text">A reasoning.</span>
-              </h2>
-              <p className="sub">
-                Unlike pure-AI guesswork, MediLens applies auditable rules — so
-                a pharmacist can trust, verify and act on every result.
-              </p>
-            </div>
-          </Reveal>
-          <div className="grid3">
-            <Reveal>
-              <div className="verdict-mini green">
-                <span className="tag">🟢 Likely genuine</span>
-                <p>
-                  “Matched Panadol in the local database. Manufacturer matches
-                  GSK. Expiry valid. All critical checks passed.”
-                </p>
-              </div>
-            </Reveal>
-            <Reveal delay="reveal-d1">
-              <div className="verdict-mini amber">
-                <span className="tag">🟡 Needs attention</span>
-                <p>
-                  “Manufacturer on pack does not match the registered maker.
-                  Check carefully or ask your pharmacist before use.”
-                </p>
-              </div>
-            </Reveal>
-            <Reveal delay="reveal-d2">
-              <div className="verdict-mini red">
-                <span className="tag">🔴 High risk</span>
-                <p>
-                  “This medicine is EXPIRED. Do not use it. Take it to a
-                  pharmacist.”
-                </p>
-              </div>
-            </Reveal>
-          </div>
-        </div>
-      </section>
-
-      {/* ================= FEATURES ================= */}
-      <section className="section">
-        <div className="container">
-          <Reveal>
-            <div className="center">
-              <span className="eyebrow">Full system</span>
-              <h2>
-                More than a <span className="grad-text">scanner</span>
-              </h2>
-            </div>
-          </Reveal>
-          <div className="grid3">
-            {[
-              ["🗺️", "Hotspot map", "Anonymised community reports reveal where suspicious packs cluster — an early-warning system for regulators."],
-              ["📄", "Pharmacist reports", "One-tap PDF reports with the full reasoning chain, ready to hand to a professional."],
-              ["📶", "Offline-first PWA", "Installs like a native app. The curated drug database and on-device OCR keep working with no internet."],
-              ["🔒", "Privacy by design", "Hotspot coordinates are rounded to ~1 km before storage. No exact location ever leaves your phone."],
-              ["🌐", "openFDA backed", "Falls back to the US FDA's public drug registry when the local database has no match."],
-              ["⚡", "Dual OCR engine", "Gemini vision when online, Tesseract.js on-device when not. The scan never dead-ends."],
-            ].map(([icon, title, text], i) => (
-              <Reveal key={title} delay={i % 3 === 1 ? "reveal-d1" : i % 3 === 2 ? "reveal-d2" : ""}>
-                <div className="card">
-                  <div className="icon">{icon}</div>
-                  <h3>{title}</h3>
-                  <p>{text}</p>
+          <div className="steps">
+            {STEPS.map((s, i) => (
+              <Reveal key={s.num} delay={i === 1 ? "reveal-d1" : i === 2 ? "reveal-d2" : ""}>
+                <div className="step">
+                  <span className="num">{s.num}</span>
+                  <h3>
+                    {s.icon} {s.title}
+                  </h3>
+                  <p>{s.text}</p>
                 </div>
               </Reveal>
             ))}
@@ -277,19 +230,144 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ================= CTA ================= */}
+      {/* ---------- medicine index ---------- */}
       <section className="section">
-        <div className="container">
+        <div className="wrap">
           <Reveal>
-            <div className="cta-band">
-              <h2>Check your medicine. Right now.</h2>
+            <div className="sec-head">
+              <span className="eyebrow">Medicine index</span>
+              <h2>
+                The local formulary, <span className="u">in the open</span>
+              </h2>
               <p>
-                Free forever. No account needed. No hardware. Just your phone
-                camera and five seconds.
+                These common medicines are verified instantly against
+                MediLens&apos;s built-in records — and every scan is also
+                checked against openFDA, so the index keeps growing beyond
+                this list.
               </p>
-              <a className="btn btn-light" href="/scan">
-                📷 Start scanning
-              </a>
+            </div>
+          </Reveal>
+          <Reveal delay="reveal-d1">
+            <div className="med-index" style={{ marginTop: 40 }}>
+              <div className="med-head">
+                <span>Medicine</span>
+                <span>Manufacturer</span>
+                <span className="h-form">Details</span>
+                <span className="h-src">Source</span>
+              </div>
+              {LOCAL_DRUGS.map((d) => (
+                <div className="med-row" key={d.name}>
+                  <span className="name">{d.name}</span>
+                  <span className="mfr">{d.manufacturer}</span>
+                  <span className="form">{d.notes ?? "—"}</span>
+                  <span className="src">LOCAL DB</span>
+                </div>
+              ))}
+              <div className="med-foot">
+                <span>
+                  {LOCAL_DRUGS.length} medicines in the local index · plus live
+                  openFDA lookups on every scan
+                </span>
+                <a href="/scan" style={{ color: "var(--accent-strong)", fontWeight: 600, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                  Scan one now <ArrowRight size={14} />
+                </a>
+              </div>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ---------- hotspot panel ---------- */}
+      <section className="section" style={{ paddingTop: 0 }}>
+        <div className="wrap">
+          <Reveal>
+            <div className="map-panel">
+              <div className="map-copy">
+                <span className="eyebrow">Community watch</span>
+                <h3>See where suspicious packs are being found</h3>
+                <p>
+                  Every scan can be reported anonymously. Grouped together,
+                  those reports form a hotspot map that warns whole
+                  neighbourhoods — and helps authorities spot patterns early.
+                </p>
+                <div className="map-legend">
+                  <span>
+                    <i style={{ background: "#B3261E" }} /> High risk
+                  </span>
+                  <span>
+                    <i style={{ background: "#B45309" }} /> Needs attention
+                  </span>
+                  <span>
+                    <i style={{ background: "#177245" }} /> Likely genuine
+                  </span>
+                </div>
+                <div>
+                  <a className="btn btn-secondary" href="/map">
+                    <MapPin size={18} /> Open the hotspot map
+                  </a>
+                </div>
+              </div>
+              <div className="map-visual" aria-hidden>
+                <svg viewBox="0 0 600 380" preserveAspectRatio="none">
+                  <g stroke="#C9D6D0" strokeWidth="1">
+                    <path d="M0 70 H600 M0 150 H600 M0 230 H600 M0 310 H600" />
+                    <path d="M90 0 V380 M210 0 V380 M330 0 V380 M450 0 V380" />
+                  </g>
+                  <path d="M-10 300 C140 250, 240 330, 380 260 S560 190, 620 210" stroke="#0E7A5F" strokeWidth="7" fill="none" strokeLinecap="round" opacity="0.5" />
+                  <path d="M60 -10 C110 110, 60 240, 130 390" stroke="#C9D6D0" strokeWidth="10" fill="none" opacity="0.7" />
+                  <path d="M330 -10 C300 120, 420 220, 400 390" stroke="#C9D6D0" strokeWidth="8" fill="none" opacity="0.6" />
+                </svg>
+                <span className="pin-dot" style={{ left: "22%", top: "30%", background: "#B3261E", color: "#B3261E" }} />
+                <span className="pin-dot" style={{ left: "55%", top: "52%", background: "#B45309", color: "#B45309", animationDelay: "0.6s" }} />
+                <span className="pin-dot" style={{ left: "74%", top: "24%", background: "#177245", color: "#177245", animationDelay: "1.1s" }} />
+                <span className="pin-dot" style={{ left: "40%", top: "72%", background: "#177245", color: "#177245", animationDelay: "1.6s" }} />
+                <span className="pin-dot" style={{ left: "84%", top: "64%", background: "#B3261E", color: "#B3261E", animationDelay: "0.3s" }} />
+              </div>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ---------- features ---------- */}
+      <section className="section alt">
+        <div className="wrap">
+          <Reveal>
+            <div className="sec-head center">
+              <span className="eyebrow center">Why MediLens</span>
+              <h2>
+                Built like a medical product, <span className="u">not a demo</span>
+              </h2>
+            </div>
+          </Reveal>
+          <div className="feat-grid">
+            {FEATURES.map((f, i) => (
+              <Reveal key={f.title} delay={i % 3 === 1 ? "reveal-d1" : i % 3 === 2 ? "reveal-d2" : ""}>
+                <div className="feat">
+                  <span className="f-ico">{f.icon}</span>
+                  <h3>{f.title}</h3>
+                  <p>{f.text}</p>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ---------- closing ---------- */}
+      <section className="section">
+        <div className="wrap">
+          <Reveal>
+            <div className="closing">
+              <div className="inner">
+                <h2>Ten seconds of checking can prevent a lifetime of harm.</h2>
+                <p>
+                  The next pack you buy for your family deserves those ten
+                  seconds. Scan it — and know.
+                </p>
+                <a className="btn btn-light" href="/scan">
+                  Scan a medicine pack <ArrowRight size={18} />
+                </a>
+              </div>
             </div>
           </Reveal>
         </div>

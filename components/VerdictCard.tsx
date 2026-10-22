@@ -7,6 +7,14 @@ import type { VerdictResult, VerdictLevel } from "@/lib/verdict";
 import { VERDICT_COPY } from "@/lib/verdict";
 import { downloadPdfReport } from "@/lib/pdf";
 import { useEffect, useRef, useState } from "react";
+import {
+  Check,
+  FileDown,
+  MapPin,
+  RotateCcw,
+  TriangleAlert,
+  XIcon,
+} from "@/components/icons";
 
 export interface ScanResult {
   label: {
@@ -37,7 +45,7 @@ function VerdictBadge({ level }: { level: VerdictLevel }) {
       </g>
     );
   return (
-    <svg className={`vbadge ${level}`} viewBox="20 8 62 84" width="96" height="96" aria-hidden>
+    <svg className={`vbadge ${level}`} viewBox="20 8 62 84" width="84" height="84" aria-hidden>
       <circle className="vbadge-ring" cx="51" cy="51" r="30" pathLength={1} />
       {icon}
     </svg>
@@ -115,14 +123,19 @@ export default function VerdictCard({
     }
   };
 
-  const reasonIcon = (i: number) =>
-    verdict.level === "green" ? "✓" : verdict.level === "amber" ? "!" : "✕";
+  const ReasonIcon = () =>
+    verdict.level === "green" ? (
+      <Check size={13} />
+    ) : verdict.level === "amber" ? (
+      <TriangleAlert size={13} />
+    ) : (
+      <XIcon size={13} />
+    );
 
   return (
     <div className="verdict-screen">
       {/* ===== Hero ===== */}
       <section className={`verdict-hero ${verdict.level}`}>
-        <div className="verdict-hero-glow" aria-hidden />
         <div className="fade-up" style={{ "--d": "0ms" } as React.CSSProperties}>
           <VerdictBadge level={verdict.level} />
         </div>
@@ -141,7 +154,10 @@ export default function VerdictCard({
             <span className="conf-num">{shownConfidence}%</span>
           </div>
           <div className="conf-track">
-            <div className="conf-fill" style={{ width: `${shownConfidence}%` }} />
+            <div
+              className={`conf-fill ${verdict.level}`}
+              style={{ width: `${shownConfidence}%` }}
+            />
           </div>
           {result.drug && (
             <p className="conf-src">
@@ -149,29 +165,10 @@ export default function VerdictCard({
             </p>
           )}
         </div>
-      </section>
-
-      {/* ===== Why this verdict ===== */}
-      <section className="card">
-        <h3 style={{ marginTop: 0 }}>Why this verdict</h3>
-        <ul className="reason-list">
-          {verdict.reasons.map((r, i) => (
-            <li
-              key={i}
-              className={`reason-row ${verdict.level} fade-up`}
-              style={{ "--d": `${420 + i * 110}ms` } as React.CSSProperties}
-            >
-              <span className="reason-ico" aria-hidden>{reasonIcon(i)}</span>
-              <span>{r}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      {/* ===== Label reading ===== */}
-      <section className="card">
-        <h3 style={{ marginTop: 0 }}>Label reading</h3>
-        <dl className="label-grid">
+        <dl
+          className="label-grid fade-up"
+          style={{ "--d": "420ms" } as React.CSSProperties}
+        >
           <div><dt>Drug</dt><dd>{result.label.drugName ?? "—"}</dd></div>
           <div><dt>Manufacturer</dt><dd>{result.label.manufacturer ?? "—"}</dd></div>
           <div><dt>Batch</dt><dd className="mono">{result.label.batchNumber ?? "—"}</dd></div>
@@ -179,13 +176,32 @@ export default function VerdictCard({
         </dl>
       </section>
 
+      {/* ===== Why this verdict ===== */}
+      <section className="card">
+        <h3>Why this verdict</h3>
+        <ul className="reason-list" style={{ borderTop: "none", paddingTop: 0, marginTop: 4 }}>
+          {verdict.reasons.map((r, i) => (
+            <li
+              key={i}
+              className={`reason-row ${verdict.level} fade-up`}
+              style={{ "--d": `${460 + i * 110}ms` } as React.CSSProperties}
+            >
+              <span className="reason-ico" aria-hidden>
+                <ReasonIcon />
+              </span>
+              <span>{r}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
       {/* ===== Actions ===== */}
-      <div className="verdict-actions fade-up" style={{ "--d": "500ms" } as React.CSSProperties}>
+      <div className="verdict-actions fade-up" style={{ "--d": "540ms" } as React.CSSProperties}>
         <button className="btn" onClick={onReset}>
-          <span aria-hidden>↻</span> Scan another
+          <RotateCcw size={17} /> Scan another
         </button>
         <button className="btn btn-secondary" onClick={handlePdf} disabled={pdfBusy}>
-          {pdfBusy ? <span className="spin" aria-hidden /> : <span aria-hidden>⬇</span>}
+          {pdfBusy ? <span className="spin" aria-hidden /> : <FileDown size={17} />}
           {pdfBusy ? "Preparing…" : "PDF report"}
         </button>
         <button
@@ -196,9 +212,9 @@ export default function VerdictCard({
           {reportState === "locating" ? (
             <span className="spin" aria-hidden />
           ) : reportState === "done" ? (
-            <span aria-hidden>✓</span>
+            <Check size={17} />
           ) : (
-            <span aria-hidden>📍</span>
+            <MapPin size={17} />
           )}
           {reportState === "locating"
             ? "Locating…"
@@ -208,7 +224,9 @@ export default function VerdictCard({
         </button>
       </div>
       {reportState === "done" && (
-        <p className="report-note ok fade-up">✓ Reported anonymously — thank you!</p>
+        <p className="report-note ok fade-up">
+          <Check size={15} /> Reported anonymously — thank you!
+        </p>
       )}
       {reportState === "denied" && (
         <p className="report-note warn fade-up">
@@ -217,13 +235,13 @@ export default function VerdictCard({
       )}
       {reportState === "failed" && (
         <p className="report-note warn fade-up">
-          Couldn't send the report. Check your connection and try again.
+          Couldn&apos;t send the report. Check your connection and try again.
         </p>
       )}
 
       {/* ===== Safety disclaimer ===== */}
-      <aside className="disclaimer fade-up" style={{ "--d": "560ms" } as React.CSSProperties}>
-        <span aria-hidden>⚠️</span>
+      <aside className="disclaimer fade-up" style={{ "--d": "600ms" } as React.CSSProperties}>
+        <TriangleAlert size={19} />
         <p>{verdict.disclaimer}</p>
       </aside>
     </div>

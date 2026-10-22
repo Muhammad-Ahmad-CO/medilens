@@ -12,27 +12,32 @@ const HotspotMap = dynamic(() => import("@/components/HotspotMap"), {
 
 export default function MapPage() {
   return (
-    <div className="card">
-      <h2 style={{ margin: "0 0 0.4rem", letterSpacing: "-0.02em" }}>Counterfeit hotspot map</h2>
-      <p className="muted small" style={{ marginTop: 0 }}>
-        Anonymised community scan reports. Red clusters suggest areas where
-        suspicious packs are being found.
-      </p>
-      <div
-        style={{
-          display: "flex",
-          gap: "1.1rem",
-          flexWrap: "wrap",
-          margin: "0.9rem 0",
-          fontSize: "0.85rem",
-          color: "var(--muted)",
-        }}
-      >
-        <span><i style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", background: "#f87171", marginRight: 6 }} />High risk</span>
-        <span><i style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", background: "#fbbf24", marginRight: 6 }} />Needs attention</span>
-        <span><i style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", background: "#34d399", marginRight: 6 }} />Likely genuine</span>
+    <div className="container" style={{ paddingBottom: "2rem" }}>
+      <div className="page-head">
+        <span className="eyebrow">Community watch</span>
+        <h2>Counterfeit hotspot map</h2>
+        <p>
+          Anonymised community scan reports. Red clusters suggest areas where
+          suspicious packs are being found.
+        </p>
       </div>
-      <HotspotMap />
+      <div className="map-frame">
+        <div className="map-legend-row" style={{ marginTop: 0 }}>
+          <span>
+            <i style={{ background: "#B3261E" }} />
+            High risk
+          </span>
+          <span>
+            <i style={{ background: "#B45309" }} />
+            Needs attention
+          </span>
+          <span>
+            <i style={{ background: "#177245" }} />
+            Likely genuine
+          </span>
+        </div>
+        <HotspotMap />
+      </div>
     </div>
   );
 }

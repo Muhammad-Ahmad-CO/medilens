@@ -1,10 +1,11 @@
 "use client";
 /**
- * Scan history — premium redesign: verdict pills, filters, confidence bars,
- * beautiful empty + unconfigured states.
+ * Scan history — verdict pills, filters and confidence bars from Supabase,
+ * with friendly empty + unavailable states.
  */
 import { useEffect, useMemo, useState } from "react";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
+import { Camera, CloudOff, SearchX } from "@/components/icons";
 
 interface ScanRow {
   id: string;
@@ -16,22 +17,10 @@ interface ScanRow {
 
 type Filter = "all" | "green" | "amber" | "red";
 
-const PILL: Record<string, { emoji: string; label: string; style: React.CSSProperties }> = {
-  green: {
-    emoji: "🟢",
-    label: "Genuine",
-    style: { background: "rgba(52,211,153,0.12)", border: "1px solid rgba(52,211,153,0.4)", color: "#6ee7b7" },
-  },
-  amber: {
-    emoji: "🟡",
-    label: "Attention",
-    style: { background: "rgba(251,191,36,0.10)", border: "1px solid rgba(251,191,36,0.4)", color: "#fcd34d" },
-  },
-  red: {
-    emoji: "🔴",
-    label: "High risk",
-    style: { background: "rgba(248,113,113,0.10)", border: "1px solid rgba(248,113,113,0.4)", color: "#fca5a5" },
-  },
+const PILL_LABEL: Record<string, string> = {
+  green: "Genuine",
+  amber: "Attention",
+  red: "High risk",
 };
 
 export default function HistoryPage() {
@@ -78,42 +67,31 @@ export default function HistoryPage() {
 
   if (state === "loading")
     return (
-      <div className="container" style={{ paddingTop: "2.5rem" }}>
-        <div className="card">
-          <h2 style={{ marginTop: 0 }}>Scan history</h2>
-          {[0, 1, 2].map((i) => (
-            <div
-              key={i}
-              style={{
-                height: 64,
-                borderRadius: 12,
-                marginBottom: 10,
-                background:
-                  "linear-gradient(90deg, rgba(255,255,255,0.04), rgba(255,255,255,0.09), rgba(255,255,255,0.04))",
-                backgroundSize: "200% 100%",
-                animation: "shimmer 1.4s infinite",
-              }}
-            />
-          ))}
-          <style>{`@keyframes shimmer { to { background-position: -200% 0; } }`}</style>
+      <div className="container" style={{ paddingTop: "2.5rem", paddingBottom: "2rem" }}>
+        <div className="page-head" style={{ paddingTop: 0 }}>
+          <span className="eyebrow">Your record</span>
+          <h2>Scan history</h2>
         </div>
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="skeleton" />
+        ))}
       </div>
     );
 
   if (state === "unconfigured")
     return (
-      <div className="container" style={{ paddingTop: "2.5rem", maxWidth: 640 }}>
-        <div className="card" style={{ textAlign: "center", padding: "3rem 2rem" }}>
-          <div style={{ fontSize: "3rem" }}>☁️</div>
-          <h2>Cloud history not connected</h2>
-          <p className="muted" style={{ lineHeight: 1.65 }}>
-            Copy <code>.env.example</code> to <code>.env.local</code>, add your
-            free Supabase URL + anon key, run{" "}
-            <code>supabase/schema.sql</code> once in the Supabase SQL editor,
-            and restart the dev server.
+      <div className="container" style={{ paddingTop: "3rem", paddingBottom: "2rem", maxWidth: 640 }}>
+        <div className="empty-state">
+          <div className="es-ico">
+            <CloudOff size={28} />
+          </div>
+          <h2>History is unavailable right now</h2>
+          <p>
+            Your scan history could not be loaded. Scanning still works
+            normally — verdicts are checked live on the scan page.
           </p>
-          <a className="btn" href="/scan" style={{ marginTop: "1rem" }}>
-            Scan anyway
+          <a className="btn" href="/scan" style={{ marginTop: "1.2rem" }}>
+            <Camera size={17} /> Scan anyway
           </a>
         </div>
       </div>
@@ -121,15 +99,17 @@ export default function HistoryPage() {
 
   if (state === "empty")
     return (
-      <div className="container" style={{ paddingTop: "2.5rem", maxWidth: 640 }}>
-        <div className="card" style={{ textAlign: "center", padding: "3rem 2rem" }}>
-          <div style={{ fontSize: "3rem" }}>🔍</div>
+      <div className="container" style={{ paddingTop: "3rem", paddingBottom: "2rem", maxWidth: 640 }}>
+        <div className="empty-state">
+          <div className="es-ico">
+            <SearchX size={28} />
+          </div>
           <h2>No scans yet</h2>
-          <p className="muted">
+          <p>
             Your verified medicines will appear here with their verdicts.
           </p>
-          <a className="btn" href="/scan" style={{ marginTop: "1rem" }}>
-            📷 Scan your first medicine
+          <a className="btn" href="/scan" style={{ marginTop: "1.2rem" }}>
+            <Camera size={17} /> Scan your first medicine
           </a>
         </div>
       </div>
@@ -143,19 +123,18 @@ export default function HistoryPage() {
   ];
 
   return (
-    <div className="container" style={{ paddingTop: "2.5rem" }}>
-      <span className="eyebrow">Your record</span>
-      <h2 style={{ margin: "0.5rem 0 1.4rem", letterSpacing: "-0.02em", fontSize: "2rem" }}>
-        Scan history
-      </h2>
+    <div className="container" style={{ paddingTop: "2.5rem", paddingBottom: "2rem" }}>
+      <div className="page-head" style={{ paddingTop: 0 }}>
+        <span className="eyebrow">Your record</span>
+        <h2>Scan history</h2>
+      </div>
 
-      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1.2rem" }}>
+      <div className="filter-row" style={{ marginTop: "1.4rem" }}>
         {filters.map((f) => (
           <button
             key={f.id}
             onClick={() => setFilter(f.id)}
             className={filter === f.id ? "btn" : "btn btn-secondary"}
-            style={{ padding: "0.55rem 1.1rem", fontSize: "0.9rem" }}
           >
             {f.label}
           </button>
@@ -164,35 +143,18 @@ export default function HistoryPage() {
 
       {filtered.length === 0 ? (
         <div className="card" style={{ textAlign: "center", padding: "2.5rem" }}>
-          <p className="muted">No scans with this verdict yet.</p>
+          <p className="muted" style={{ margin: 0 }}>
+            No scans with this verdict yet.
+          </p>
         </div>
       ) : (
-        <div style={{ display: "grid", gap: "0.7rem" }}>
+        <div className="hist-list">
           {filtered.map((r) => {
-            const pill = PILL[r.verdict] ?? PILL.amber;
+            const level = PILL_LABEL[r.verdict] ? r.verdict : "amber";
             return (
-              <div
-                key={r.id}
-                className="card"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "1rem",
-                  padding: "1rem 1.2rem",
-                  marginBottom: 0,
-                }}
-              >
-                <span
-                  style={{
-                    ...pill.style,
-                    borderRadius: 999,
-                    padding: "0.35rem 0.85rem",
-                    fontSize: "0.82rem",
-                    fontWeight: 700,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {pill.emoji} {pill.label}
+              <div key={r.id} className="hist-row">
+                <span className={`pill-v ${level}`}>
+                  <i aria-hidden /> {PILL_LABEL[level]}
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <b style={{ display: "block", fontSize: "1.02rem" }}>
@@ -203,27 +165,14 @@ export default function HistoryPage() {
                   </span>
                 </div>
                 {r.confidence != null && (
-                  <div style={{ textAlign: "right", minWidth: 90 }}>
+                  <div className="hist-conf">
                     <div className="small muted">
                       {Math.round(r.confidence * 100)}%
                     </div>
-                    <div
-                      style={{
-                        height: 6,
-                        borderRadius: 99,
-                        background: "rgba(255,255,255,0.08)",
-                        marginTop: 4,
-                        overflow: "hidden",
-                      }}
-                    >
+                    <div className="track">
                       <div
-                        style={{
-                          height: "100%",
-                          width: `${Math.round(r.confidence * 100)}%`,
-                          background:
-                            "linear-gradient(90deg, var(--brand), var(--emerald))",
-                          borderRadius: 99,
-                        }}
+                        className="fill"
+                        style={{ width: `${Math.round(r.confidence * 100)}%` }}
                       />
                     </div>
                   </div>

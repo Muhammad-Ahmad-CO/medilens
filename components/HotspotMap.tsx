@@ -16,9 +16,9 @@ interface Report {
 }
 
 const COLORS: Record<string, string> = {
-  red: "#b91c1c",
-  amber: "#b45309",
-  green: "#15803d",
+  red: "#B3261E",
+  amber: "#B45309",
+  green: "#177245",
 };
 
 export default function HotspotMap() {
@@ -66,7 +66,11 @@ export default function HotspotMap() {
           ? "Loading reports…"
           : `${count} anonymised report${count === 1 ? "" : "s"} (locations rounded to ~1 km for privacy).`}
       </p>
-      <div ref={divRef} style={{ height: "60vh", borderRadius: 14, zIndex: 0 }} />
+      <div
+        ref={divRef}
+        className="leaflet-wrap"
+        style={{ height: "60vh", zIndex: 0 }}
+      />
     </div>
   );
 }

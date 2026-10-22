@@ -1,12 +1,13 @@
 "use client";
 /**
- * Scan page: camera → /api/scan → Gemini OCR, with automatic fallback to
+ * Scan page: camera -> /api/scan -> Gemini OCR, with automatic fallback to
  * on-device Tesseract OCR when the server has no AI key configured.
  */
 import { useState } from "react";
 import CameraCapture from "@/components/CameraCapture";
 import VerdictCard, { type ScanResult } from "@/components/VerdictCard";
 import { extractTextOnDevice } from "@/lib/ocr-client";
+import { CircleAlert, CircleCheck, TriangleAlert } from "@/components/icons";
 
 type Phase = "idle" | "reading" | "done" | "error";
 
@@ -134,73 +135,66 @@ export default function ScanPage() {
 
   return (
     <div className="scan-wrap">
-      <div className="card" style={{ padding: "1.6rem" }}>
+      <div className="scan-card">
         <span className="eyebrow">Step 1 of 1</span>
-        <h2 style={{ margin: "0.5rem 0 1.2rem", letterSpacing: "-0.02em" }}>
-          Scan medicine pack
-        </h2>
-      {phase === "idle" && (
-        <>
-          <CameraCapture onCapture={handleCapture} />
-          <div
-            style={{
-              marginTop: "1.4rem",
-              paddingTop: "1.2rem",
-              borderTop: "1px solid var(--card-border)",
-              textAlign: "center",
-            }}
-          >
-            <p className="muted small" style={{ margin: "0 0 0.7rem" }}>
-              No camera handy? Run the real pipeline on a sample pack:
-            </p>
-            <div style={{ display: "flex", gap: "0.6rem", justifyContent: "center", flexWrap: "wrap" }}>
-              <button
-                className="btn btn-secondary"
-                onClick={() => handleDemoScan("genuine")}
-              >
-                ✨ Demo: genuine pack
-              </button>
-              <button
-                className="btn btn-secondary"
-                onClick={() => handleDemoScan("expired")}
-              >
-                ⚠️ Demo: expired pack
-              </button>
+        <h2>Scan medicine pack</h2>
+        {phase === "idle" && (
+          <>
+            <CameraCapture onCapture={handleCapture} />
+            <div className="demo-zone">
+              <p className="muted small" style={{ margin: 0 }}>
+                No camera handy? Run the real pipeline on a sample pack:
+              </p>
+              <div className="dz-btns">
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => handleDemoScan("genuine")}
+                >
+                  <CircleCheck size={17} /> Demo: genuine pack
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => handleDemoScan("expired")}
+                >
+                  <TriangleAlert size={17} /> Demo: expired pack
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+        {phase === "reading" && (
+          <div>
+            <p style={{ fontWeight: 600, margin: "0.4rem 0 0" }}>{status}</p>
+            <div className="progress">
+              <div style={{ width: `${Math.round(progress * 100)}%` }} />
+            </div>
+            <div className="scan-steps" aria-hidden>
+              {["Reading label", "Matching database", "Safety verdict"].map((label, i) => {
+                const thresholds = [0.3, 0.62, 1.0];
+                const state =
+                  progress >= thresholds[i] ? "done"
+                  : i === 0 || progress >= thresholds[i - 1] ? "active"
+                  : "";
+                return (
+                  <div key={label} className={`scan-step ${state}`}>
+                    {label}
+                  </div>
+                );
+              })}
             </div>
           </div>
-        </>
-      )}
-      {phase === "reading" && (
-        <div>
-          <p style={{ fontWeight: 600 }}>{status}</p>
-          <div className="progress">
-            <div style={{ width: `${Math.round(progress * 100)}%` }} />
+        )}
+        {phase === "error" && (
+          <div className="scan-state">
+            <div className="ss-ico">
+              <CircleAlert size={26} />
+            </div>
+            <p style={{ fontWeight: 600, margin: "0 0 1rem" }}>{status}</p>
+            <button className="btn" onClick={() => setPhase("idle")}>
+              Try again
+            </button>
           </div>
-          <div className="scan-steps" aria-hidden>
-            {["Reading label", "Matching database", "Safety verdict"].map((label, i) => {
-              const thresholds = [0.3, 0.62, 1.0];
-              const state =
-                progress >= thresholds[i] ? "done"
-                : i === 0 || progress >= thresholds[i - 1] ? "active"
-                : "";
-              return (
-                <div key={label} className={`scan-step ${state}`}>
-                  {label}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-      {phase === "error" && (
-        <div style={{ textAlign: "center", padding: "1rem 0" }}>
-          <div style={{ fontSize: "2.4rem", marginBottom: "0.6rem" }} aria-hidden>😕</div>
-          <p style={{ fontWeight: 600, margin: "0 0 1rem" }}>{status}</p>
-          <button className="btn" onClick={() => setPhase("idle")}>
-            <span aria-hidden>↻</span> Try again
-          </button>
-        </div>
-      )}
+        )}
       </div>
     </div>
   );
