@@ -60,6 +60,7 @@ export default function RootLayout({
             </a>
             <nav>
               <a href="/scan">Scan</a>
+              <a href="/prescription">Prescription</a>
               <a href="/map">Hotspot map</a>
               <a href="/history">History</a>
               <a href="/scan" className="nav-cta">
@@ -78,6 +79,7 @@ export default function RootLayout({
               </a>
               <nav>
                 <a href="/scan">Scan a medicine</a>
+                <a href="/prescription">Read a prescription</a>
                 <a href="/map">Hotspot map</a>
                 <a href="/history">Scan history</a>
               </nav>

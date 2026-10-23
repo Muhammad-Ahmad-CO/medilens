@@ -66,14 +66,15 @@ function cleanJson(raw: string): string {
 }
 
 /** One vision attempt against one model. Null = this model did not answer. */
-async function tryGeminiModel(
+async function callGeminiOnce(
   model: string,
   version: string,
   timeoutMs: number,
   key: string,
+  prompt: string,
   imageBase64: string,
   mimeType: string
-): Promise<ExtractedLabel | null> {
+): Promise<string | null> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
@@ -87,7 +88,7 @@ async function tryGeminiModel(
           contents: [
             {
               parts: [
-                { text: PROMPT },
+                { text: prompt },
                 { inline_data: { mime_type: mimeType, data: imageBase64 } },
               ],
             },
@@ -108,8 +109,48 @@ async function tryGeminiModel(
       return null;
     }
     const data = await res.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) return null;
+    return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Walk the model chain inside the shared time budget; first answer wins. */
+async function callGeminiChain(
+  prompt: string,
+  imageBase64: string,
+  mimeType: string
+): Promise<string | null> {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) return null;
+  const deadline = Date.now() + GEMINI_BUDGET_MS;
+  for (const step of GEMINI_CHAIN) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
+    const text = await callGeminiOnce(
+      step.model,
+      step.version,
+      Math.min(step.timeoutMs, remaining),
+      key,
+      prompt,
+      imageBase64,
+      mimeType
+    );
+    if (text) return text;
+  }
+  return null;
+}
+
+/** Server-side: extract label fields with Gemini vision. Null = unavailable. */
+export async function extractWithGemini(
+  imageBase64: string,
+  mimeType = "image/jpeg"
+): Promise<ExtractedLabel | null> {
+  const text = await callGeminiChain(PROMPT, imageBase64, mimeType);
+  if (!text) return null;
+  try {
     const j = JSON.parse(cleanJson(text));
     return {
       drugName: j.drugName ?? null,
@@ -121,33 +162,78 @@ async function tryGeminiModel(
     };
   } catch {
     return null;
-  } finally {
-    clearTimeout(timer);
   }
 }
 
-/** Server-side: extract label fields with Gemini vision. Null = unavailable. */
-export async function extractWithGemini(
+/* ------------------------------------------------------------------ */
+/* Prescription reader                                                 */
+/* ------------------------------------------------------------------ */
+
+export interface PrescriptionMedicine {
+  name: string | null;
+  form: string | null;
+  strength: string | null;
+  quantity: string | null;
+  timing: string | null;
+  instructions: string | null;
+  /** True when the handwriting for this line could not be read safely. */
+  unclear: boolean;
+}
+
+export interface PrescriptionResult {
+  medicines: PrescriptionMedicine[];
+  notes: string | null;
+}
+
+const PRESCRIPTION_PROMPT = `You are reading a doctor's handwritten prescription in a photo. Doctors' handwriting is famously hard to read — be careful and honest.
+
+Return ONLY valid JSON (no markdown fences) in exactly this shape:
+{
+  "medicines": [
+    {
+      "name": string | null,        // medicine name as written, e.g. "Panadol"
+      "form": string | null,         // "Tablet" | "Capsule" | "Syrup" | "Drops" | "Cream" | "Injection" | null
+      "strength": string | null,     // e.g. "500mg", "120mg/5ml"
+      "quantity": string | null,     // how much was prescribed, e.g. "10 tablets", "1 bottle"
+      "timing": string | null,       // plain words, e.g. "1 tablet in the morning and 1 at night"
+      "instructions": string | null, // e.g. "After food", "Before breakfast", "With water"
+      "unclear": boolean             // true if you cannot read this line confidently
+    }
+  ],
+  "notes": string | null             // anything else important written on the prescription
+}
+
+Rules:
+- Expand abbreviations into plain words: BD = twice a day, TDS = three times a day, OD = once a day, HS = at bedtime, SOS = only when needed. Notation like "1+0+1" means 1 in the morning, 0 at midday, 1 at night — say it in plain words in "timing".
+- "Tab." means tablet, "Cap." capsule, "Syp." syrup.
+- NEVER guess a medicine name. A wrong medicine name can kill. If a word could be two different medicines, or you cannot read it confidently, set "name" to null and "unclear" to true for that line. Still fill the other fields you CAN read on that line.
+- If a detail (strength, quantity, timing) is not written or not readable, use null — do not invent it.
+- Skip lines that are clearly not medicines (doctor's name, patient name, dates, signatures, advice like "rest").`;
+
+export async function readPrescriptionWithGemini(
   imageBase64: string,
   mimeType = "image/jpeg"
-): Promise<ExtractedLabel | null> {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) return null;
-  const deadline = Date.now() + GEMINI_BUDGET_MS;
-  for (const step of GEMINI_CHAIN) {
-    const remaining = deadline - Date.now();
-    if (remaining <= 0) break;
-    const label = await tryGeminiModel(
-      step.model,
-      step.version,
-      Math.min(step.timeoutMs, remaining),
-      key,
-      imageBase64,
-      mimeType
-    );
-    if (label) return label;
+): Promise<PrescriptionResult | null> {
+  const text = await callGeminiChain(PRESCRIPTION_PROMPT, imageBase64, mimeType);
+  if (!text) return null;
+  try {
+    const j = JSON.parse(cleanJson(text));
+    const meds = Array.isArray(j.medicines) ? j.medicines : [];
+    return {
+      medicines: meds.map((m: Record<string, unknown>) => ({
+        name: (m.name as string) ?? null,
+        form: (m.form as string) ?? null,
+        strength: (m.strength as string) ?? null,
+        quantity: (m.quantity as string) ?? null,
+        timing: (m.timing as string) ?? null,
+        instructions: (m.instructions as string) ?? null,
+        unclear: m.unclear === true || !m.name,
+      })),
+      notes: (j.notes as string) ?? null,
+    };
+  } catch {
+    return null;
   }
-  return null;
 }
 
 const KNOWN_MAKERS = [

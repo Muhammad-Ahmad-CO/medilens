@@ -795,3 +795,18 @@ a:focus-visible, button:focus-visible {
 .pharm-name { font-weight: 600; font-size: 14px; flex: 1; }
 .pharm-dir { font-size: 13px; font-weight: 600; color: #1D4ED8; text-decoration: none; flex: none; }
 .pharm-dir:hover { text-decoration: underline; }
+
+/* Prescription reader */
+.rx-list { display: grid; gap: 12px; margin-top: 12px; }
+.rx-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 14px 16px; }
+.rx-card.unclear { border-color: #f59e0b; background: #fffbeb; }
+.rx-card-head { display: flex; align-items: center; gap: 10px; }
+.rx-card-head h3 { margin: 0; font-size: 17px; }
+.rx-card.unclear .rx-card-head { color: #92400e; }
+.rx-chip { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; background: #eef2ff; color: #3730a3; border-radius: 999px; padding: 3px 9px; }
+.rx-uses { margin: 6px 0 0; font-size: 13px; color: var(--muted); }
+.rx-rows { margin: 10px 0 0; display: grid; gap: 6px; }
+.rx-rows > div { display: grid; grid-template-columns: 84px 1fr; gap: 10px; }
+.rx-rows dt { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); padding-top: 2px; }
+.rx-rows dd { margin: 0; font-size: 14px; line-height: 1.5; }
+.rx-card p { font-size: 14px; line-height: 1.55; }
