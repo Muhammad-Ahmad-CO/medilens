@@ -1,15 +1,3 @@
-/**
- * Drug data layer.
- *
- * Two sources, in priority order:
- *  1. LOCAL_DRUGS — a curated, offline-first list of common medicines sold in
- *     Pakistan. This is the DEMO-SAFE source: it always works, even with no
- *     internet, which is exactly what you want on demo day.
- *  2. openFDA — the US FDA's free public drug API, used as a secondary source
- *     when the local DB has no match.
- */
-
-/** Plain-language details shown on the result screen ("About this medicine"). */
 export interface DrugInfo {
   uses: string;
   dosage: string;
@@ -25,7 +13,6 @@ export interface LocalDrug {
   info?: DrugInfo;
 }
 
-/** Curated demo database — extend this list any time (it is just data). */
 export const LOCAL_DRUGS: LocalDrug[] = [
   {
     name: "Panadol", manufacturer: "GSK", packSizes: ["100 tablets", "200 tablets"], notes: "Paracetamol 500mg",
@@ -141,16 +128,23 @@ function norm(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-/** Fuzzy match against the local DB (handles minor OCR misreads). */
 export function findLocalDrug(query: string): LocalDrug | null {
   const q = norm(query);
   if (!q) return null;
-  // Exact-ish match first…
+  for (const d of LOCAL_DRUGS) {
+    if (norm(d.name) === q) return d;
+  }
+  let best: LocalDrug | null = null;
   for (const d of LOCAL_DRUGS) {
     const n = norm(d.name);
-    if (n === q || q.includes(n) || n.includes(q)) return d;
+    if (q.includes(n) && (!best || n.length > norm(best.name).length)) best = d;
   }
-  // …then a tolerant prefix match (covers 1–2 character OCR errors).
+  if (best) return best;
+  for (const d of LOCAL_DRUGS) {
+    const n = norm(d.name);
+    if (n.includes(q) && (!best || n.length < norm(best.name).length)) best = d;
+  }
+  if (best) return best;
   for (const d of LOCAL_DRUGS) {
     const n = norm(d.name);
     if (n.length >= 4 && q.length >= 4 && (n.startsWith(q.slice(0, 4)) || q.startsWith(n.slice(0, 4)))) {
@@ -166,7 +160,6 @@ export interface OpenFDAResult {
   manufacturer?: string;
 }
 
-/** Free secondary lookup. No API key needed for low volume. */
 export async function lookupOpenFDA(query: string): Promise<OpenFDAResult> {
   try {
     const url =
@@ -184,6 +177,6 @@ export async function lookupOpenFDA(query: string): Promise<OpenFDAResult> {
       manufacturer: first?.openfda?.manufacturer_name?.[0],
     };
   } catch {
-    return { found: false }; // offline or API down → treat as "no match"
+    return { found: false };
   }
 }
