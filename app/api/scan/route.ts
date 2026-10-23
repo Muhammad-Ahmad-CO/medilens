@@ -71,7 +71,12 @@ export async function POST(req: NextRequest) {
   if (label.drugName) {
     const local = findLocalDrug(label.drugName);
     if (local) {
-      record = { name: local.name, manufacturer: local.manufacturer, source: "local" };
+      record = {
+        name: local.name,
+        manufacturer: local.manufacturer,
+        source: "local",
+        info: local.info ?? null,
+      };
     } else {
       const fda = await lookupOpenFDA(label.drugName);
       if (fda.found) {

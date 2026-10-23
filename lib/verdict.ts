@@ -24,6 +24,8 @@ export interface DrugRecord {
   manufacturer: string;
   /** "local" = our curated DB, "openfda" = US FDA open database. */
   source: "local" | "openfda";
+  /** Plain-language drug details (local DB only; null for openFDA hits). */
+  info?: import("./drugs").DrugInfo | null;
 }
 
 export interface VerdictResult {

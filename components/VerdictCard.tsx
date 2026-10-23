@@ -12,9 +12,12 @@ import {
   FileDown,
   MapPin,
   RotateCcw,
+  StopSquare,
   TriangleAlert,
+  Volume,
   XIcon,
 } from "@/components/icons";
+import type { DrugInfo } from "@/lib/drugs";
 
 export interface ScanResult {
   label: {
@@ -24,7 +27,12 @@ export interface ScanResult {
     expiryDate: string | null;
     ocrConfidence: number;
   };
-  drug: { name: string; manufacturer: string; source: string } | null;
+  drug: {
+    name: string;
+    manufacturer: string;
+    source: string;
+    info?: DrugInfo | null;
+  } | null;
   verdict: VerdictResult;
 }
 
@@ -87,6 +95,37 @@ export default function VerdictCard({
   const [pdfBusy, setPdfBusy] = useState(false);
   const timers = useRef<number[]>([]);
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
+
+  /* ---- Listen button: speaks ONLY when tapped (never autoplay) ---- */
+  const [speaking, setSpeaking] = useState(false);
+  const canSpeak =
+    typeof window !== "undefined" && "speechSynthesis" in window;
+  useEffect(
+    () => () => {
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    },
+    []
+  );
+  const toggleSpeak = () => {
+    if (!canSpeak) return;
+    const synth = window.speechSynthesis;
+    if (speaking) {
+      synth.cancel();
+      setSpeaking(false);
+      return;
+    }
+    const drugName = result.drug?.name ?? result.label.drugName ?? "This medicine";
+    const text = `${drugName}. ${copy.title}. ${copy.advice}`;
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.rate = 0.98;
+    utter.onend = () => setSpeaking(false);
+    utter.onerror = () => setSpeaking(false);
+    synth.cancel();
+    synth.speak(utter);
+    setSpeaking(true);
+  };
 
   const reportToMap = () => {
     if (reportState === "locating") return;
@@ -195,8 +234,47 @@ export default function VerdictCard({
         </ul>
       </section>
 
+      {/* ===== About this medicine (local DB details) ===== */}
+      {result.drug?.info && (
+        <section className="card fade-up" style={{ "--d": "520ms" } as React.CSSProperties}>
+          <h3>About this medicine</h3>
+          <dl className="drug-info">
+            <div>
+              <dt>Used for</dt>
+              <dd>{result.drug.info.uses}</dd>
+            </div>
+            <div>
+              <dt>Usual dose</dt>
+              <dd>{result.drug.info.dosage}</dd>
+            </div>
+            <div>
+              <dt>Side effects</dt>
+              <dd>{result.drug.info.sideEffects}</dd>
+            </div>
+            <div>
+              <dt>Be careful</dt>
+              <dd>{result.drug.info.caution}</dd>
+            </div>
+          </dl>
+          <p className="drug-info-note">
+            General information only — always confirm your dose with your doctor
+            or pharmacist.
+          </p>
+        </section>
+      )}
+
       {/* ===== Actions ===== */}
       <div className="verdict-actions fade-up" style={{ "--d": "540ms" } as React.CSSProperties}>
+        {canSpeak && (
+          <button
+            className={speaking ? "btn" : "btn btn-secondary"}
+            onClick={toggleSpeak}
+            aria-pressed={speaking}
+          >
+            {speaking ? <StopSquare size={17} /> : <Volume size={17} />}
+            {speaking ? "Stop" : "Listen to result"}
+          </button>
+        )}
         <button className="btn" onClick={onReset}>
           <RotateCcw size={17} /> Scan another
         </button>

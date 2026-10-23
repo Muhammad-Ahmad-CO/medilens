@@ -780,3 +780,10 @@ a:focus-visible, button:focus-visible {
   .vbadge-ring, .vbadge-draw { stroke-dashoffset: 0 !important; }
   .vbadge-dot { opacity: 1 !important; transform: none !important; }
 }
+
+/* About this medicine (drug details on the result screen) */
+.drug-info { margin: 10px 0 0; display: grid; gap: 10px; }
+.drug-info > div { display: grid; grid-template-columns: 92px 1fr; gap: 10px; }
+.drug-info dt { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); padding-top: 2px; }
+.drug-info dd { margin: 0; font-size: 14px; line-height: 1.55; }
+.drug-info-note { margin: 12px 0 0; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line, #e5e7eb); padding-top: 10px; }
