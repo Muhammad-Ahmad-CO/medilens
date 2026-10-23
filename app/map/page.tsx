@@ -18,7 +18,8 @@ export default function MapPage() {
         <h2>Counterfeit hotspot map</h2>
         <p>
           Anonymised community scan reports. Red clusters suggest areas where
-          suspicious packs are being found.
+          suspicious packs are being found. You can also find real pharmacies
+          near you on the same map — the blue pins.
         </p>
       </div>
       <div className="map-frame">
