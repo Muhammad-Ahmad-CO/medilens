@@ -34,18 +34,6 @@ const COLORS: Record<string, string> = {
 
 const PHARMACY_COLOR = "#1D4ED8";
 
-function haversineM(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371000;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLng = ((lng2 - lng1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLng / 2) ** 2;
-  return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
-}
-
 function formatDist(m: number): string {
   return m < 1000 ? `${m} m` : `${(m / 1000).toFixed(1)} km`;
 }
@@ -108,58 +96,15 @@ export default function HotspotMap() {
         const { latitude: lat, longitude: lng } = pos.coords;
         setPharmState("loading");
         try {
-          const query =
-            `[out:json][timeout:25];` +
-            `(node["amenity"="pharmacy"](around:3000,${lat},${lng});` +
-            `way["amenity"="pharmacy"](around:3000,${lat},${lng}););` +
-            `out center 60;`;
-          // The free Overpass servers sometimes answer "at capacity" —
-          // try the main server, then one mirror, before giving up.
-          const body = `data=${encodeURIComponent(query)}`;
-          let data: { elements?: unknown[] } | null = null;
-          for (const endpoint of [
-            "https://overpass-api.de/api/interpreter",
-            "https://overpass.kumi.systems/api/interpreter",
-          ]) {
-            try {
-              const ctrl = new AbortController();
-              const timer = setTimeout(() => ctrl.abort(), 25000);
-              const res = await fetch(endpoint, {
-                method: "POST",
-                headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                body,
-                signal: ctrl.signal,
-              });
-              clearTimeout(timer);
-              if (!res.ok) continue;
-              data = await res.json();
-              break;
-            } catch {
-              /* try the next endpoint */
-            }
-          }
-          if (!data) throw new Error("overpass");
-          const elements = (data.elements ?? []) as {
-            lat?: number;
-            lon?: number;
-            center?: { lat: number; lon: number };
-            tags?: { name?: string };
-          }[];
-          const found: Pharmacy[] = elements
-            .map((el) => {
-              const pLat = el.lat ?? el.center?.lat;
-              const pLng = el.lon ?? el.center?.lon;
-              if (pLat == null || pLng == null) return null;
-              return {
-                name: el.tags?.name ?? "Pharmacy",
-                lat: pLat,
-                lng: pLng,
-                distM: haversineM(lat, lng, pLat, pLng),
-              } as Pharmacy;
-            })
-            .filter((p: Pharmacy | null): p is Pharmacy => p !== null)
-            .sort((a: Pharmacy, b: Pharmacy) => a.distM - b.distM)
-            .slice(0, 15);
+          const ctrl = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), 50000);
+          const res = await fetch(`/api/pharmacies?lat=${lat}&lng=${lng}`, {
+            signal: ctrl.signal,
+          });
+          clearTimeout(timer);
+          if (!res.ok) throw new Error("pharmacies");
+          const data = (await res.json()) as { pharmacies: Pharmacy[] };
+          const found = data.pharmacies ?? [];
           setPharmacies(found);
           setPharmState(found.length ? "done" : "empty");
 
@@ -225,7 +170,6 @@ export default function HotspotMap() {
         style={{ height: "60vh", zIndex: 0 }}
       />
 
-      {/* ===== Pharmacies near you ===== */}
       <div style={{ marginTop: "1.25rem" }}>
         <button
           className="btn"
