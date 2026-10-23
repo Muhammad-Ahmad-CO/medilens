@@ -21,20 +21,24 @@ import { LOCAL_DRUGS } from "./drugs";
 // JSON is identical whichever model reads it.
 //
 // Diagnosis from the live Vercel logs on 2026-10-23: every fallback attempt
-// on the v1beta endpoint answered 404 (model not found on that API
-// version), while the primary v1beta model works but is sometimes very
-// slow on larger photos (one success took ~80s). So: the primary stays on
-// v1beta with a long window, and the fallbacks are tried on the v1
-// endpoint, where the GA models live.
+// Chain v3 (2026-10-23, verified live): Google retired the 2.x series
+// for NEW API keys — gemini-2.5-flash / -lite return 404 ("no longer
+// available to new users") even though ListModels still lists them, so
+// they can never be fallbacks on this key. Only 3.x models answer, and
+// they fail with fast, momentary upstream 503s (one attempt 503, the
+// next seconds later reads the label perfectly). So the chain is
+// 3.x-only, retries the primary once, and runs inside a ~42s budget.
+const PRIMARY_MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
 const GEMINI_CHAIN: { model: string; version: string; timeoutMs: number }[] = [
-  {
-    model: process.env.GEMINI_MODEL || "gemini-3.8-flash",
-    version: "v1beta",
-    timeoutMs: 50000,
-  },
-  { model: "gemini-2.5-flash", version: "v1", timeoutMs: 30000 },
-  { model: "gemini-2.5-flash-lite", version: "v1", timeoutMs: 30000 },
+  { model: PRIMARY_MODEL, version: "v1beta", timeoutMs: 15000 },
+  { model: PRIMARY_MODEL, version: "v1beta", timeoutMs: 15000 },
+  { model: "gemini-3.5-flash", version: "v1beta", timeoutMs: 15000 },
+  { model: "gemini-3.8-flash", version: "v1beta", timeoutMs: 20000 },
+  { model: "gemini-3.5-flash-lite", version: "v1beta", timeoutMs: 12000 },
 ];
+// The scan page gives up on the server at 45s — stop trying models after
+// ~42s so the client fallback stays in charge of what happens next.
+const GEMINI_BUDGET_MS = 42000;
 
 const PROMPT = `You are reading a medicine label in a photo. The item may be a
 medicine box OR a blister strip (patta) — the foil strip that holds tablets.
@@ -129,11 +133,14 @@ export async function extractWithGemini(
 ): Promise<ExtractedLabel | null> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) return null;
+  const deadline = Date.now() + GEMINI_BUDGET_MS;
   for (const step of GEMINI_CHAIN) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
     const label = await tryGeminiModel(
       step.model,
       step.version,
-      step.timeoutMs,
+      Math.min(step.timeoutMs, remaining),
       key,
       imageBase64,
       mimeType
