@@ -19,11 +19,22 @@ import { LOCAL_DRUGS } from "./drugs";
 // quota while another answers instantly. So the vision call walks a short
 // chain of free models and uses the first one that responds — the label
 // JSON is identical whichever model reads it.
-const GEMINI_MODELS = [
-  process.env.GEMINI_MODEL || "gemini-3.8-flash",
-  "gemini-2.5-flash",
-  "gemini-2.5-flash-lite",
-].filter((m, i, a) => a.indexOf(m) === i);
+//
+// Diagnosis from the live Vercel logs on 2026-10-23: every fallback attempt
+// on the v1beta endpoint answered 404 (model not found on that API
+// version), while the primary v1beta model works but is sometimes very
+// slow on larger photos (one success took ~80s). So: the primary stays on
+// v1beta with a long window, and the fallbacks are tried on the v1
+// endpoint, where the GA models live.
+const GEMINI_CHAIN: { model: string; version: string; timeoutMs: number }[] = [
+  {
+    model: process.env.GEMINI_MODEL || "gemini-3.8-flash",
+    version: "v1beta",
+    timeoutMs: 50000,
+  },
+  { model: "gemini-2.5-flash", version: "v1", timeoutMs: 30000 },
+  { model: "gemini-2.5-flash-lite", version: "v1", timeoutMs: 30000 },
+];
 
 const PROMPT = `You are reading a medicine label in a photo. The item may be a
 medicine box OR a blister strip (patta) — the foil strip that holds tablets.
@@ -53,17 +64,17 @@ function cleanJson(raw: string): string {
 /** One vision attempt against one model. Null = this model did not answer. */
 async function tryGeminiModel(
   model: string,
+  version: string,
+  timeoutMs: number,
   key: string,
   imageBase64: string,
   mimeType: string
 ): Promise<ExtractedLabel | null> {
-  // One attempt gets at most ~20s; a hung model must not eat the whole
-  // request when the next model in the chain might answer instantly.
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 20000);
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
+      `https://generativelanguage.googleapis.com/${version}/models/${model}:generateContent?key=${key}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -118,8 +129,15 @@ export async function extractWithGemini(
 ): Promise<ExtractedLabel | null> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) return null;
-  for (const model of GEMINI_MODELS) {
-    const label = await tryGeminiModel(model, key, imageBase64, mimeType);
+  for (const step of GEMINI_CHAIN) {
+    const label = await tryGeminiModel(
+      step.model,
+      step.version,
+      step.timeoutMs,
+      key,
+      imageBase64,
+      mimeType
+    );
     if (label) return label;
   }
   return null;
