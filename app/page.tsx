@@ -255,7 +255,7 @@ export default function Home() {
                 <span className="h-form">Details</span>
                 <span className="h-src">Source</span>
               </div>
-              {LOCAL_DRUGS.map((d) => (
+              {LOCAL_DRUGS.slice(0, 12).map((d) => (
                 <div className="med-row" key={d.name}>
                   <span className="name">{d.name}</span>
                   <span className="mfr">{d.manufacturer}</span>
@@ -265,7 +265,7 @@ export default function Home() {
               ))}
               <div className="med-foot">
                 <span>
-                  {LOCAL_DRUGS.length} medicines in the local index · plus live
+                  {LOCAL_DRUGS.length} medicines in the local index · showing first 12 · plus live
                   openFDA lookups on every scan
                 </span>
                 <a href="/scan" style={{ color: "var(--accent-strong)", fontWeight: 600, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 5 }}>
