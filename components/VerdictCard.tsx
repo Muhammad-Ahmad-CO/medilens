@@ -34,6 +34,8 @@ export interface ScanResult {
     info?: DrugInfo | null;
   } | null;
   verdict: VerdictResult;
+  /** Multi-photo scans only: how many photos were combined. */
+  photosUsed?: number;
 }
 
 /* ---------- Animated verdict badge (SVG stroke-draw) ---------- */
@@ -201,6 +203,11 @@ export default function VerdictCard({
           {result.drug && (
             <p className="conf-src">
               Matched via {result.drug.source === "local" ? "local database" : "openFDA"}
+            </p>
+          )}
+          {result.photosUsed && result.photosUsed > 1 && (
+            <p className="conf-src">
+              Combined from {result.photosUsed} photos
             </p>
           )}
         </div>
