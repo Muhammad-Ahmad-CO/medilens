@@ -24,6 +24,12 @@ export default function ScanPage() {
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState("");
   const [result, setResult] = useState<ScanResult | null>(null);
+  // Multi-photo scan: up to 3 photos of ONE pack (the name is on one
+  // face, the batch/expiry on another). Collected here, sent as a
+  // single request. The single-photo flow below is untouched.
+  const [multi, setMulti] = useState(false);
+  const [photos, setPhotos] = useState<Blob[]>([]);
+  const [photoUrls, setPhotoUrls] = useState<string[]>([]);
 
   const DEMOS = {
     genuine: {
@@ -137,12 +143,99 @@ export default function ScanPage() {
     }
   };
 
+  /* ---------- multi-photo collection (up to 3 photos, one pack) ---------- */
+  const photoHint =
+    photos.length === 0
+      ? "Photo 1: dawai ka naam wali side lo."
+      : photos.length === 1
+        ? "Photo 2: batch number / expiry wali side lo."
+        : "Photo 3 (optional): koi aur side, ya Check dabao.";
+
+  const handleCollectPhoto = async (blob: Blob) => {
+    if (photos.length >= 3) return;
+    const small = await downscaleImage(blob);
+    setPhotos((p) => [...p, small]);
+    setPhotoUrls((u) => [...u, URL.createObjectURL(small)]);
+  };
+
+  const removePhoto = (i: number) => {
+    URL.revokeObjectURL(photoUrls[i]);
+    setPhotos((p) => p.filter((_, j) => j !== i));
+    setPhotoUrls((u) => u.filter((_, j) => j !== i));
+  };
+
+  const clearPhotos = () => {
+    photoUrls.forEach((u) => URL.revokeObjectURL(u));
+    setPhotos([]);
+    setPhotoUrls([]);
+  };
+
+  const handleMultiScan = async () => {
+    if (photos.length === 0) return;
+    setPhase("reading");
+    setProgress(0.05);
+    setStatus("Reading labels…");
+    const stageRunner = runStages(` (${photos.length} photos)`);
+    try {
+      const images: string[] = [];
+      for (const p of photos) images.push(await blobToBase64(p));
+      let res: Response | null = null;
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 45_000);
+      try {
+        res = await fetch("/api/scan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ images }),
+          signal: controller.signal,
+        });
+      } catch {
+        res = null; // timed out or network error → fallback below
+      } finally {
+        clearTimeout(timer);
+      }
+      // Fallback: read each photo on-device and join the texts — the
+      // server's text path then takes the first name/batch/expiry
+      // found. No conflict guard in this path, so it is a fallback
+      // only, not the main flow.
+      if (!res || res.status === 503) {
+        setStatus("AI unavailable — reading on-device instead…");
+        const parts: string[] = [];
+        for (const p of photos) {
+          const { text } = await extractTextOnDevice(p, (pr) =>
+            setProgress(0.1 + pr * 0.7)
+          );
+          parts.push(text);
+        }
+        res = await fetch("/api/scan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: parts.join("\n"), ocrConfidence: 0.55 }),
+        });
+      }
+      if (!res.ok) throw new Error("Scan failed");
+      const data = await res.json();
+      await stageRunner;
+      setProgress(1);
+      await new Promise((r) => setTimeout(r, 350));
+      setResult(data);
+      setPhase("done");
+    } catch {
+      setPhase("error");
+      setStatus(
+        "Something went wrong. Your photos are still saved — try again."
+      );
+    }
+  };
+
   if (phase === "done" && result) {
     return (
       <VerdictCard
         result={result}
         onReset={() => {
           setResult(null);
+          clearPhotos();
+          setMulti(false);
           setPhase("idle");
         }}
       />
@@ -156,8 +249,83 @@ export default function ScanPage() {
         <h2>Scan medicine pack</h2>
         {phase === "idle" && (
           <>
-            <CameraCapture onCapture={handleCapture} />
-            <div className="demo-zone">
+            <div className="dz-btns" style={{ marginBottom: "0.8rem" }}>
+              <button
+                className={`btn ${!multi ? "" : "btn-secondary"}`}
+                onClick={() => {
+                  clearPhotos();
+                  setMulti(false);
+                }}
+              >
+                1 photo
+              </button>
+              <button
+                className={`btn ${multi ? "" : "btn-secondary"}`}
+                onClick={() => setMulti(true)}
+              >
+                2–3 photos
+              </button>
+            </div>
+            {multi ? (
+              <>
+                <p className="muted small" style={{ marginTop: 0 }}>
+                  {photoHint}
+                </p>
+                <CameraCapture onCapture={handleCollectPhoto} />
+                {photoUrls.length > 0 && (
+                  <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                    {photoUrls.map((u, i) => (
+                      <div key={u} style={{ position: "relative" }}>
+                        <img
+                          src={u}
+                          alt={`Photo ${i + 1}`}
+                          style={{
+                            width: 72,
+                            height: 72,
+                            objectFit: "cover",
+                            borderRadius: 8,
+                          }}
+                        />
+                        <button
+                          onClick={() => removePhoto(i)}
+                          aria-label={`Remove photo ${i + 1}`}
+                          style={{
+                            position: "absolute",
+                            top: -8,
+                            right: -8,
+                            width: 22,
+                            height: 22,
+                            borderRadius: "50%",
+                            border: "none",
+                            background: "#111",
+                            color: "#fff",
+                            cursor: "pointer",
+                          }}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <button
+                  className="btn"
+                  style={{ marginTop: 12 }}
+                  disabled={photoUrls.length === 0}
+                  onClick={handleMultiScan}
+                >
+                  Check karo ({photoUrls.length} photo
+                  {photoUrls.length === 1 ? "" : "s"})
+                </button>
+                <p className="muted small">
+                  Pehli photo naam wali side ki, doosri batch/expiry wali
+                  side ki lo. Ek hi pack ki photos honi chahiye.
+                </p>
+              </>
+            ) : (
+              <>
+                <CameraCapture onCapture={handleCapture} />
+                <div className="demo-zone">
               <p className="muted small" style={{ margin: 0 }}>
                 No camera handy? Run the real pipeline on a sample pack:
               </p>
@@ -176,6 +344,8 @@ export default function ScanPage() {
                 </button>
               </div>
             </div>
+          </>
+        )}
           </>
         )}
         {phase === "reading" && (
