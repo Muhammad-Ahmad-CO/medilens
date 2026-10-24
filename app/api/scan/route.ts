@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { extractWithGemini, extractFromText } from "@/lib/ocr";
+import {
+  extractWithGemini,
+  extractFromText,
+  mergeLabels,
+  type ExtractedLabel,
+} from "@/lib/ocr";
 import { findLocalDrug, lookupOpenFDA } from "@/lib/drugs";
 import { evaluateVerdict, type DrugRecord } from "@/lib/verdict";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
@@ -18,7 +23,10 @@ const MAX_IMAGE_BASE64_BYTES = 6 * 1024 * 1024;
 
 /**
  * POST /api/scan
- * Body: { image: base64 }  → server-side Gemini OCR
+ * Body: { image: base64 }  → server-side Gemini OCR (one photo)
+ *    or { images: base64[] } (1–3 photos of ONE pack) → each photo is
+ *       read separately, then merged field-by-field (name from one
+ *       photo, batch/expiry from another) into a single verdict.
  *    or { text: string, ocrConfidence?: number } → client-side Tesseract text
  *
  * Pipeline: OCR → drug match (local DB → openFDA) → rule-based verdict
@@ -26,6 +34,7 @@ const MAX_IMAGE_BASE64_BYTES = 6 * 1024 * 1024;
  */
 export async function POST(req: NextRequest) {
   // Security: per-IP rate limit (protects the Gemini free-tier quota).
+  // One request counts once, however many photos it carries.
   const rl = rateLimit(`scan:${clientIp(req)}`, SCAN_LIMIT, SCAN_WINDOW_MS);
   if (!rl.ok) return rateLimitedResponse(rl.retryAfter);
 
@@ -35,8 +44,50 @@ export async function POST(req: NextRequest) {
   }
 
   // --- 1. Label extraction -------------------------------------------------
-  let label;
-  if (body.image) {
+  let label: ExtractedLabel;
+  let photosUsed = 0;
+  let conflict = false;
+  if (Array.isArray(body.images)) {
+    // Multi-photo scan: up to 3 photos of the same pack.
+    if (body.images.length < 1 || body.images.length > 3) {
+      return NextResponse.json(
+        { error: "Send 1 to 3 photos." },
+        { status: 400 }
+      );
+    }
+    for (const img of body.images) {
+      if (String(img).length > MAX_IMAGE_BASE64_BYTES) {
+        return NextResponse.json(
+          { error: "Image too large. Use a photo under ~4 MB." },
+          { status: 413 }
+        );
+      }
+    }
+    const cleaned = body.images.map((img: unknown) =>
+      String(img).replace(/^data:image\/\w+;base64,/, "")
+    );
+    // Read the photos in parallel (wall time ≈ the slowest single read).
+    // A photo the AI fails to read simply contributes nothing — the
+    // merged label is built from the photos that DID read.
+    const reads = await Promise.all(
+      cleaned.map((b: string) => extractWithGemini(b))
+    );
+    const ok = reads.filter((r): r is ExtractedLabel => r !== null);
+    if (ok.length === 0) {
+      return NextResponse.json(
+        {
+          error: "AI_OCR_UNAVAILABLE",
+          message:
+            "Server-side vision AI is not configured. The app will fall back to on-device OCR.",
+        },
+        { status: 503 }
+      );
+    }
+    const merged = mergeLabels(ok);
+    label = merged.label;
+    conflict = merged.conflict;
+    photosUsed = body.images.length;
+  } else if (body.image) {
     // Security: reject oversized uploads before spending any AI quota.
     if (String(body.image).length > MAX_IMAGE_BASE64_BYTES) {
       return NextResponse.json(
@@ -90,7 +141,21 @@ export async function POST(req: NextRequest) {
   }
 
   // --- 3. Verdict (rule-based, explainable) ---------------------------------
-  const verdict = evaluateVerdict(label, record);
+  let verdict = evaluateVerdict(label, record);
+  if (conflict && verdict.level === "green") {
+    // Two photos named two different known drugs: the photos may be of
+    // two different packs, so a GREEN would be a lie. Downgrade to AMBER
+    // and say so plainly instead of silently picking one name.
+    verdict = {
+      ...verdict,
+      level: "amber",
+      confidence: Math.min(verdict.confidence, 0.7),
+      reasons: [
+        ...verdict.reasons,
+        "Photos show different medicine names — make sure all photos are of the same pack.",
+      ],
+    };
+  }
 
   // --- 4. Persist scan (best effort — never fail the scan over storage) -----
   if (isSupabaseConfigured()) {
@@ -110,5 +175,10 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ label, drug: record, verdict });
+  return NextResponse.json({
+    label,
+    drug: record,
+    verdict,
+    ...(photosUsed > 0 ? { photosUsed } : {}),
+  });
 }
