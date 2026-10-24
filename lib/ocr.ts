@@ -1,6 +1,33 @@
+/**
+ * OCR layer — two paths, one interface.
+ *
+ *  PRIMARY (server): Gemini vision API (free tier via Google AI Studio).
+ *  FALLBACK (browser): Tesseract.js, 100% free + offline — see ocr-client.ts.
+ *
+ * The API route tries Gemini first; if no key is configured it tells the
+ * client to run on-device OCR instead. Either way the SAME ExtractedLabel
+ * shape flows into the verdict engine.
+ */
 import type { ExtractedLabel } from "./verdict";
 import { LOCAL_DRUGS } from "./drugs";
 
+// gemini-2.0-flash was shut down by Google on 2026-06-01 (API returns 404).
+// gemini-3.8-flash is Google's named successor and is on the API free tier.
+// Override the primary any time with the GEMINI_MODEL env var.
+//
+// The free tier is shared and bursty: one model can be overloaded or out of
+// quota while another answers instantly. So the vision call walks a short
+// chain of free models and uses the first one that responds — the label
+// JSON is identical whichever model reads it.
+//
+// Diagnosis from the live Vercel logs on 2026-10-23: every fallback attempt
+// Chain v3 (2026-10-23, verified live): Google retired the 2.x series
+// for NEW API keys — gemini-2.5-flash / -lite return 404 ("no longer
+// available to new users") even though ListModels still lists them, so
+// they can never be fallbacks on this key. Only 3.x models answer, and
+// they fail with fast, momentary upstream 503s (one attempt 503, the
+// next seconds later reads the label perfectly). So the chain is
+// 3.x-only, retries the primary once, and runs inside a ~42s budget.
 const PRIMARY_MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
 const GEMINI_CHAIN: { model: string; version: string; timeoutMs: number }[] = [
   { model: PRIMARY_MODEL, version: "v1beta", timeoutMs: 15000 },
@@ -9,6 +36,8 @@ const GEMINI_CHAIN: { model: string; version: string; timeoutMs: number }[] = [
   { model: "gemini-3.8-flash", version: "v1beta", timeoutMs: 20000 },
   { model: "gemini-3.5-flash-lite", version: "v1beta", timeoutMs: 12000 },
 ];
+// The scan page gives up on the server at 45s — stop trying models after
+// ~42s so the client fallback stays in charge of what happens next.
 const GEMINI_BUDGET_MS = 42000;
 
 const PROMPT = `You are reading a medicine label in a photo. The item may be a
@@ -36,6 +65,7 @@ function cleanJson(raw: string): string {
   return raw.replace(/```json|```/g, "").trim();
 }
 
+/** One vision attempt against one model. Null = this model did not answer. */
 async function callGeminiOnce(
   model: string,
   version: string,
@@ -63,6 +93,10 @@ async function callGeminiOnce(
               ],
             },
           ],
+          // Keep this minimal on purpose: extra generation fields
+          // (temperature / maxOutputTokens / thinkingConfig) coincided with
+          // the live vision call failing on 2026-10-23 — the model chain
+          // below is what fixed reliability, not generation tuning.
           generationConfig: {
             responseMimeType: "application/json",
           },
@@ -70,6 +104,7 @@ async function callGeminiOnce(
       }
     );
     if (!res.ok) {
+      // Visible in the Vercel function logs if diagnosis is ever needed.
       console.error(`Gemini ${model} responded ${res.status}`);
       return null;
     }
@@ -82,6 +117,7 @@ async function callGeminiOnce(
   }
 }
 
+/** Walk the model chain inside the shared time budget; first answer wins. */
 async function callGeminiChain(
   prompt: string,
   imageBase64: string,
@@ -107,6 +143,7 @@ async function callGeminiChain(
   return null;
 }
 
+/** Server-side: extract label fields with Gemini vision. Null = unavailable. */
 export async function extractWithGemini(
   imageBase64: string,
   mimeType = "image/jpeg"
@@ -128,6 +165,10 @@ export async function extractWithGemini(
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* Prescription reader                                                 */
+/* ------------------------------------------------------------------ */
+
 export interface PrescriptionMedicine {
   name: string | null;
   form: string | null;
@@ -135,6 +176,7 @@ export interface PrescriptionMedicine {
   quantity: string | null;
   timing: string | null;
   instructions: string | null;
+  /** True when the handwriting for this line could not be read safely. */
   unclear: boolean;
 }
 
@@ -195,10 +237,17 @@ export async function readPrescriptionWithGemini(
 }
 
 const KNOWN_MAKERS = [
-  "GSK", "Abbott", "Sanofi", "Getz", "CCL", "Sami", "Reckitt", "Pfizer",
-  "Novartis", "Himont", "Pharmevo", "Martin Dow",
+  "GSK", "Abbott", "Sanofi", "Getz", "Getz Pharma", "CCL", "Sami",
+  "Reckitt", "Pfizer", "Novartis", "Bayer", "Merck", "MSD",
+  "Novo Nordisk", "Janssen", "Boehringer Ingelheim", "Johnson & Johnson",
+  "Johnson", "Allergan", "LEO Pharma", "Galderma", "AstraZeneca",
+  "Himont", "Pharmevo", "Martin Dow",
 ];
 
+/**
+ * Heuristic extraction from raw OCR text (used with the Tesseract fallback).
+ * Finds known drug names / makers with regexes; everything else is best-effort.
+ */
 export function extractFromText(
   text: string,
   ocrConfidence = 0.55
@@ -206,8 +255,15 @@ export function extractFromText(
   const upper = text.toUpperCase();
   const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
+  // Blister strips print the same word over and over ("PANADOL PANADOL
+  // PANADOL GSK"). Collapse those runs so the name reads as one drug.
   const dedupeWords = (s: string) => s.replace(/\b(\S+)(\s+\1\b)+/gi, "$1");
 
+  // Drug name: the known drug mentioned in the text. The LONGEST match
+  // wins — "PANADOL" is a substring of "PANADOL EXTRA", so a first-hit
+  // loop loses the variant before the drug lookup ever runs (this exact
+  // flaw was caught live by a unit test; findLocalDrug plays by the
+  // same longest-match rule for the same reason).
   let drugName: string | null = null;
   let bestLen = -1;
   for (const d of LOCAL_DRUGS) {
@@ -218,6 +274,7 @@ export function extractFromText(
       }
     }
   }
+  // …otherwise the first non-empty line as an uncertain candidate.
   if (!drugName) {
     const line = text
       .split("\n")
@@ -234,6 +291,7 @@ export function extractFromText(
     }
   }
 
+  // Handles: "Batch B123", "Batch: B123", "Batch No. B123", "B.No. X99", "Lot 42A"
   const batch =
     text.match(
       /(?:batch(?:\s*no\.?)?|b\.?\s*no\.?|lot(?:\s*no\.?)?)[\s:.]*([A-Z0-9][A-Z0-9\-]{2,})/i
