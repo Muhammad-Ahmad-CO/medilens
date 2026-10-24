@@ -237,8 +237,11 @@ export async function readPrescriptionWithGemini(
 }
 
 const KNOWN_MAKERS = [
-  "GSK", "Abbott", "Sanofi", "Getz", "CCL", "Sami", "Reckitt", "Pfizer",
-  "Novartis", "Himont", "Pharmevo", "Martin Dow",
+  "GSK", "Abbott", "Sanofi", "Getz", "Getz Pharma", "CCL", "Sami",
+  "Reckitt", "Pfizer", "Novartis", "Bayer", "Merck", "MSD",
+  "Novo Nordisk", "Janssen", "Boehringer Ingelheim", "Johnson & Johnson",
+  "Johnson", "Allergan", "LEO Pharma", "Galderma", "AstraZeneca",
+  "Himont", "Pharmevo", "Martin Dow",
 ];
 
 /**
@@ -256,12 +259,19 @@ export function extractFromText(
   // PANADOL GSK"). Collapse those runs so the name reads as one drug.
   const dedupeWords = (s: string) => s.replace(/\b(\S+)(\s+\1\b)+/gi, "$1");
 
-  // Drug name: first known drug mentioned in the text…
+  // Drug name: the known drug mentioned in the text. The LONGEST match
+  // wins — "PANADOL" is a substring of "PANADOL EXTRA", so a first-hit
+  // loop loses the variant before the drug lookup ever runs (this exact
+  // flaw was caught live by a unit test; findLocalDrug plays by the
+  // same longest-match rule for the same reason).
   let drugName: string | null = null;
+  let bestLen = -1;
   for (const d of LOCAL_DRUGS) {
     if (upper.includes(norm(d.name).toUpperCase()) || upper.includes(d.name.toUpperCase())) {
-      drugName = d.name;
-      break;
+      if (d.name.length > bestLen) {
+        drugName = d.name;
+        bestLen = d.name.length;
+      }
     }
   }
   // …otherwise the first non-empty line as an uncertain candidate.
