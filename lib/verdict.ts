@@ -154,10 +154,15 @@ export function evaluateVerdict(
   }
 
   // --- Rule 4: expiry ------------------------------------------------------
+  // A missing expiry is penalised just like a missing batch: a genuine
+  // pack always carries one. (Adversarial review, Oct 2026: a box with a
+  // batch but no readable expiry used to score a clean GREEN.)
   const expiry = parseExpiry(label.expiryDate);
-  if (label.expiryDate && !expiry) {
+  if (!label.expiryDate) {
+    raise("amber", "No expiry date detected. Genuine packs always carry one.", 0.1);
+  } else if (!expiry) {
     raise("amber", "Expiry date could not be parsed — verify it manually.", 0.15);
-  } else if (expiry) {
+  } else {
     const now = new Date();
     const daysLeft = Math.ceil(
       (expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
