@@ -145,6 +145,13 @@ describe("evaluateVerdict", () => {
     expect(v.reasons.join(" ")).toMatch(/No batch number/);
   });
 
+  it("a missing expiry date is AMBER (a batch alone must not score GREEN)", () => {
+    const v = evaluateVerdict(label({ expiryDate: null }), PANADOL);
+    expect(v.level).toBe("amber");
+    expect(v.confidence).toBeCloseTo(0.82, 2);
+    expect(v.reasons.join(" ")).toMatch(/No expiry date detected/);
+  });
+
   it("a blister strip (no batch, no expiry) is AMBER and points at the box", () => {
     const v = evaluateVerdict(
       label({ batchNumber: null, expiryDate: null }),
@@ -256,6 +263,12 @@ describe("extractFromText", () => {
     expect(label.batchNumber).toBe("B12345");
     expect(label.expiryDate).toBe("08/27");
     expect(label.ocrConfidence).toBe(0.9);
+  });
+
+  it("recognises the new index makers (AstraZeneca, Bayer, Novo Nordisk)", () => {
+    expect(extractFromText("NEXUM\nAstraZeneca\nBatch No: N12345", 0.9).manufacturer).toBe("AstraZeneca");
+    expect(extractFromText("CIPROXIN\nBayer\nBatch No: C12345", 0.9).manufacturer).toBe("Bayer");
+    expect(extractFromText("MIXTARD\nNovo Nordisk\nBatch No: M12345", 0.9).manufacturer).toBe("Novo Nordisk");
   });
 
   it("reads a blister strip: repeated name counts once, batch may be absent", () => {
