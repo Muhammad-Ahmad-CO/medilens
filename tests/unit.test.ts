@@ -15,6 +15,7 @@ import {
 import { findLocalDrug, LOCAL_DRUGS } from "@/lib/drugs";
 import { rateLimit } from "@/lib/rate-limit";
 import { extractFromText } from "@/lib/ocr";
+import { mergeLabels } from "@/lib/ocr";
 
 /* ================= rate limiter ================= */
 afterEach(() => {
@@ -271,6 +272,8 @@ describe("extractFromText", () => {
     expect(extractFromText("MIXTARD\nNovo Nordisk\nBatch No: M12345", 0.9).manufacturer).toBe("Novo Nordisk");
   });
 
+
+
   it("reads a blister strip: repeated name counts once, batch may be absent", () => {
     const label = extractFromText("PANADOL PANADOL PANADOL\nGSK GSK", 0.7);
     expect(label.drugName).toBe("Panadol");
@@ -304,5 +307,63 @@ describe("extractFromText", () => {
       0.9
     );
     expect(label.drugName).toBe("Panadol Extra");
+  });
+});
+
+describe("mergeLabels (multi-photo scan)", () => {
+  const photo = (over: Partial<Parameters<typeof mergeLabels>[0][number]> = {}) => ({
+    drugName: null,
+    manufacturer: null,
+    batchNumber: null,
+    expiryDate: null,
+    ocrConfidence: 0.9,
+    ...over,
+  });
+
+  it("combines the name from one photo with batch/expiry from another", () => {
+    const { label, conflict } = mergeLabels([
+      photo({ drugName: "Panadol", manufacturer: "GSK" }),
+      photo({ batchNumber: "B12345", expiryDate: "08/27" }),
+    ]);
+    expect(label.drugName).toBe("Panadol");
+    expect(label.manufacturer).toBe("GSK");
+    expect(label.batchNumber).toBe("B12345");
+    expect(label.expiryDate).toBe("08/27");
+    expect(conflict).toBe(false);
+  });
+
+  it("prefers a name that matches the index over an unmatched one", () => {
+    const { label, conflict } = mergeLabels([
+      photo({ drugName: "Somexyz Tablets" }),
+      photo({ drugName: "Panadol" }),
+    ]);
+    expect(label.drugName).toBe("Panadol");
+    expect(conflict).toBe(false);
+  });
+
+  it("flags a conflict when two photos name different known drugs", () => {
+    const { label, conflict } = mergeLabels([
+      photo({ drugName: "Panadol" }),
+      photo({ drugName: "Brufen", batchNumber: "X99" }),
+    ]);
+    expect(conflict).toBe(true);
+    expect(label.drugName).toBe("Panadol"); // first photo wins
+    expect(label.batchNumber).toBe("X99");
+  });
+
+  it("takes the lowest photo confidence (conservative)", () => {
+    const { label } = mergeLabels([
+      photo({ drugName: "Panadol", ocrConfidence: 0.95 }),
+      photo({ batchNumber: "B1", ocrConfidence: 0.6 }),
+    ]);
+    expect(label.ocrConfidence).toBe(0.6);
+  });
+
+  it("a single photo merges to itself", () => {
+    const { label, conflict } = mergeLabels([
+      photo({ drugName: "Panadol", batchNumber: "B1", expiryDate: "08/27" }),
+    ]);
+    expect(label.drugName).toBe("Panadol");
+    expect(conflict).toBe(false);
   });
 });
