@@ -234,6 +234,45 @@ export default function VerdictCard({
         </ul>
       </section>
 
+      {/* ===== Honest-limit notes (adversarial review, Oct 2026) ===== */}
+      {verdict.level === "green" && result.drug && (
+        <section className="card fade-up">
+          <p
+            className="drug-info-note"
+            style={{ marginTop: 0, borderTop: "none", paddingTop: 0 }}
+          >
+            This check verified the data printed on the pack (name, maker,
+            batch, expiry). It cannot verify the physical pack itself — also
+            check the hologram, seal and print quality, and buy from a
+            trusted pharmacy.
+          </p>
+        </section>
+      )}
+      {verdict.level === "red" && !result.drug && (
+        <section className="card fade-up">
+          <p
+            className="drug-info-note"
+            style={{ marginTop: 0, borderTop: "none", paddingTop: 0 }}
+          >
+            This medicine was not found in our lists. That does not prove it
+            is fake — it may be new, imported, or misspelled. Please confirm
+            with your pharmacist before deciding.
+          </p>
+        </section>
+      )}
+      {(result.label.ocrConfidence ?? 1) < 0.6 && (
+        <section className="card fade-up">
+          <p
+            className="drug-info-note"
+            style={{ marginTop: 0, borderTop: "none", paddingTop: 0 }}
+          >
+            The photo was hard to read. Retake it in good light, hold the
+            phone steady, and make sure the name, batch and expiry are
+            clearly visible.
+          </p>
+        </section>
+      )}
+
       {/* ===== About this medicine (local DB details) ===== */}
       {result.drug?.info && (
         <section className="card fade-up" style={{ "--d": "520ms" } as React.CSSProperties}>
