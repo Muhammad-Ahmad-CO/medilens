@@ -9,7 +9,8 @@
  * shape flows into the verdict engine.
  */
 import type { ExtractedLabel } from "./verdict";
-import { LOCAL_DRUGS } from "./drugs";
+export type { ExtractedLabel };
+import { LOCAL_DRUGS, findLocalDrug } from "./drugs";
 
 // gemini-2.0-flash was shut down by Google on 2026-06-01 (API returns 404).
 // gemini-3.8-flash is Google's named successor and is on the API free tier.
@@ -303,4 +304,57 @@ export function extractFromText(
     )?.[1] ?? null;
 
   return { drugName, manufacturer, batchNumber: batch, expiryDate: expiry, ocrConfidence };
+}
+
+/**
+ * Merge labels from several photos of ONE pack (multi-photo scan).
+ *
+ * Real packs split the fields across faces: the name is on the front,
+ * the batch/expiry on a flap or a crimped strip edge. Each photo is read
+ * separately, then the fields are combined field-by-field:
+ *  - drug name: a name that matches the local index wins (a clean reading
+ *    beats an OCR-misread one); otherwise the first name found.
+ *  - maker / batch / expiry: the first non-null value wins.
+ *  - confidence: the lowest of the photos (conservative).
+ *  - conflict: true when two photos name DIFFERENT known drugs — the
+ *    caller must not let that score GREEN, because the photos may be of
+ *    two different packs (e.g. Panadol's front + Brufen's batch).
+ */
+export function mergeLabels(labels: ExtractedLabel[]): {
+  label: ExtractedLabel;
+  conflict: boolean;
+} {
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const firstNonNull = <T,>(pick: (l: ExtractedLabel) => T | null): T | null => {
+    for (const l of labels) {
+      const v = pick(l);
+      if (v !== null && v !== undefined) return v;
+    }
+    return null;
+  };
+  const names = labels
+    .map((l) => l.drugName)
+    .filter((n): n is string => !!n);
+  const matched = names.filter((n) => findLocalDrug(n));
+  // Distinct matched names, without spreading a Set (the project's TS
+  // target does not allow Set iteration).
+  const distinctMatched: string[] = [];
+  for (const n of matched.map(norm)) {
+    if (!distinctMatched.includes(n)) distinctMatched.push(n);
+  }
+  const conflict = distinctMatched.length > 1;
+  const drugName = matched.length > 0 ? matched[0] : (names[0] ?? null);
+  const confs = labels
+    .map((l) => l.ocrConfidence)
+    .filter((c) => typeof c === "number");
+  return {
+    label: {
+      drugName,
+      manufacturer: firstNonNull((l) => l.manufacturer),
+      batchNumber: firstNonNull((l) => l.batchNumber),
+      expiryDate: firstNonNull((l) => l.expiryDate),
+      ocrConfidence: confs.length ? Math.min(...confs) : 0.55,
+    },
+    conflict,
+  };
 }
