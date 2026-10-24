@@ -1,3 +1,10 @@
+/**
+ * UNIT TESTS — one small part at a time.
+ *
+ * Sections: rate limiter · verdict engine (the red/amber/green rules and
+ * the expiry-date parser) · drug database matching · on-device OCR text
+ * reading. Run with: npm test
+ */
 import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from "vitest";
 import {
   evaluateVerdict,
@@ -9,6 +16,7 @@ import { findLocalDrug, LOCAL_DRUGS } from "@/lib/drugs";
 import { rateLimit } from "@/lib/rate-limit";
 import { extractFromText } from "@/lib/ocr";
 
+/* ================= rate limiter ================= */
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -48,6 +56,7 @@ describe("rateLimit", () => {
   });
 });
 
+/* ================= verdict engine ================= */
 describe("verdict engine (clock frozen at 2026-10-24)", () => {
 beforeAll(() => {
   vi.useFakeTimers();
@@ -65,7 +74,7 @@ function label(overrides: Partial<ExtractedLabel> = {}): ExtractedLabel {
     drugName: "Panadol",
     manufacturer: "GSK",
     batchNumber: "B12345",
-    expiryDate: "08/27",
+    expiryDate: "08/27", // Aug 2027 — safely in the future
     ocrConfidence: 0.95,
     ...overrides,
   };
@@ -79,7 +88,7 @@ describe("parseExpiry", () => {
   it("reads MM/YY as the end of that month", () => {
     const d = parseExpiry("08/27");
     expect(d?.getFullYear()).toBe(2027);
-    expect(d?.getMonth()).toBe(7);
+    expect(d?.getMonth()).toBe(7); // August (0-based)
     expect(d?.getDate()).toBe(31);
   });
 
@@ -96,7 +105,7 @@ describe("parseExpiry", () => {
   });
 
   it("returns null for nonsense instead of guessing", () => {
-    expect(parseExpiry("13/27")).toBeNull();
+    expect(parseExpiry("13/27")).toBeNull(); // there is no 13th month
     expect(parseExpiry("hello")).toBeNull();
     expect(parseExpiry(null)).toBeNull();
     expect(parseExpiry("")).toBeNull();
@@ -118,6 +127,7 @@ describe("evaluateVerdict", () => {
   });
 
   it("a pack expiring within 90 days is AMBER (expires soon)", () => {
+    // Dec 2026 ends ~68 days after the frozen "today" (24 Oct 2026).
     const v = evaluateVerdict(label({ expiryDate: "12/26" }), PANADOL);
     expect(v.level).toBe("amber");
     expect(v.reasons.join(" ")).toMatch(/Expires soon/);
@@ -150,6 +160,16 @@ describe("evaluateVerdict", () => {
     expect(v.reasons.join(" ")).toMatch(/does not match the registered manufacturer/);
   });
 
+  it("a record whose maker is 'Various' never triggers a mismatch", () => {
+    const v = evaluateVerdict(
+      label({ manufacturer: "Sandoz" }),
+      { name: "Azomax", manufacturer: "Various", source: "local" }
+    );
+    expect(v.level).toBe("green");
+    expect(v.confidence).toBe(0.92);
+    expect(v.reasons.join(" ")).not.toMatch(/does not match/);
+  });
+
   it("a weak OCR reading is AMBER (retake the photo)", () => {
     const v = evaluateVerdict(label({ ocrConfidence: 0.4 }), PANADOL);
     expect(v.level).toBe("amber");
@@ -166,9 +186,9 @@ describe("evaluateVerdict", () => {
   it("confidence drops as problems stack up, but never below 0.3", () => {
     const v = evaluateVerdict(
       label({
-        expiryDate: "01/20",
-        batchNumber: null,
-        ocrConfidence: 0.2,
+        expiryDate: "01/20", // expired (red)
+        batchNumber: null, // + amber rule
+        ocrConfidence: 0.2, // + weak reading
       }),
       PANADOL
     );
@@ -179,6 +199,7 @@ describe("evaluateVerdict", () => {
 });
 });
 
+/* ================= drug database ================= */
 describe("findLocalDrug", () => {
   it("finds Panadol by its exact name", () => {
     const d = findLocalDrug("Panadol");
@@ -195,6 +216,12 @@ describe("findLocalDrug", () => {
     expect(findLocalDrug("Panadol Extra")?.name).toBe("Panadol Extra");
   });
 
+  it("finds new index entries (Azomax, Ventolin, Nexum)", () => {
+    expect(findLocalDrug("Azomax")?.name).toBe("Azomax");
+    expect(findLocalDrug("Ventolin")?.manufacturer).toBe("GSK");
+    expect(findLocalDrug("Nexum")?.manufacturer).toBe("AstraZeneca");
+  });
+
   it("returns null for a drug that is not in the database", () => {
     expect(findLocalDrug("WonderCure 500")).toBeNull();
     expect(findLocalDrug("")).toBeNull();
@@ -202,8 +229,8 @@ describe("findLocalDrug", () => {
 });
 
 describe("LOCAL_DRUGS data quality", () => {
-  it("holds the 12 curated medicines", () => {
-    expect(LOCAL_DRUGS.length).toBe(12);
+  it("holds 200+ medicines", () => {
+    expect(LOCAL_DRUGS.length).toBeGreaterThanOrEqual(200);
   });
 
   it("every drug has complete plain-language info for the result card", () => {
@@ -217,6 +244,7 @@ describe("LOCAL_DRUGS data quality", () => {
   });
 });
 
+/* ================= on-device OCR text ================= */
 describe("extractFromText", () => {
   it("reads a normal box label completely", () => {
     const label = extractFromText(
@@ -255,6 +283,9 @@ describe("extractFromText", () => {
   });
 
   it("a variant name beats its base drug (Panadol Extra, not Panadol)", () => {
+    // "PANADOL" is a substring of "PANADOL EXTRA" — a first-hit matcher
+    // stops at Panadol and the Extra identity is lost before the drug
+    // lookup even runs. The longest matching name must win.
     const label = extractFromText(
       "PANADOL EXTRA\nGSK\nBatch No: B12345\nEXP: 08/27",
       0.9
